@@ -321,7 +321,7 @@
       <div class="scanlines"></div>
       <div class="vignette"></div>
       <div class="flicker"></div>
-      <div class="overlay-msg" id="loginOverlay">
+      <div class="overlay-msg" id="loginOverlay" style="display:none">
         <h2>ENTER CALLSIGN</h2>
         <p>Identify yourself, pilot. Your callsign is logged on the leaderboard.</p>
         <form id="loginForm" autocomplete="off">
@@ -1010,18 +1010,31 @@
 
     spawnWave(wave);
 
-    // Show the login screen first. A previously saved callsign is pre-filled
-    // so returning pilots can just hit ENTER. The game overlay stays hidden
-    // until a valid callsign is entered.
-    const saved = loadStoredName();
-    if(saved){
-      nameInput.value = saved;
-      setPlayerName(saved); // reflect in HUD + LD context immediately
+    // Feature flag: enable-player-login-screen
+    // v1 → show the ENTER CALLSIGN overlay before game start (new behaviour).
+    // control → skip directly to the GALACTIC DEFENDER start overlay (original behaviour).
+    // Fail-safe default is "control" so a flag evaluation error never breaks the game.
+    const loginEnabled = ldClient
+      ? ldClient.variation("enable-player-login-screen", "control") === "v1"
+      : false;
+
+    if(loginEnabled){
+      // v1: show the login overlay; defer game start until callsign entered.
+      const saved = loadStoredName();
+      if(saved){
+        nameInput.value = saved;
+        setPlayerName(saved); // reflect in HUD + LD context immediately
+      }
+      updateHud();
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: original behaviour — hide the login overlay, show the game start overlay.
+      loginOverlay.style.display = "none";
+      updateHud();
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
     }
-    updateHud();
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
 
     requestAnimationFrame(loop);
   }
