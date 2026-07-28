@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.2",
+  "flagKey": "enable-player-login-screen",
+  "scope": "frontend",
+  "targetVariation": "v1",
+  "releasePlan": {
+    "notes": "Flag gates the player callsign login overlay in invaders.html init(). control path: loginOverlay hidden, showOverlay('GALACTIC DEFENDER',...) called directly — identical to pre-PR behavior. v1 path: loginOverlay shown, callsign captured, stored in localStorage, reflected in HUD and ldClient.identify(). loginOverlay HTML given display:none default so no flash before init() runs. isTypingTarget guard on keydown/keyup is unflagged (safe standalone improvement). loginForm submit listener is registered unconditionally (form is hidden in control so it is inert).",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "ld_autogen__telemetry-lcp-average",
+      "ld_autogen__telemetry-lcp-p95",
+      "enable-player-login-screen-login-success",
+      "enable-player-login-screen-login-error"
+    ],
+    "randomizationUnit": "user"
+  },
+  "releaseIntent": {
+    "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
+    "action": "auto",
+    "notBefore": "",
+    "segments": [],
+    "prerequisites": [],
+    "releaseWith": [],
+    "reference": "",
+    "approvedBy": "",
+    "notes": ""
+  }
+}
