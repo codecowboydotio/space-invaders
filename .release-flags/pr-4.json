@@ -2,6 +2,7 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login-screen",
   "scope": "frontend",
+  "targetVariation": "v1",
   "releasePlan": {
     "notes": "Flag gates the player callsign login overlay in invaders.html init(). control path: loginOverlay hidden, showOverlay('GALACTIC DEFENDER',...) called directly — identical to pre-PR behavior. v1 path: loginOverlay shown, callsign captured, stored in localStorage, reflected in HUD and ldClient.identify(). loginOverlay HTML given display:none default so no flash before init() runs. isTypingTarget guard on keydown/keyup is unflagged (safe standalone improvement). loginForm submit listener is registered unconditionally (form is hidden in control so it is inert).",
     "metricKeys": [
