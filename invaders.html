@@ -548,11 +548,18 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation errors so we can measure how often the login
+      // overlay causes friction — classified monitoring (soft signal).
+      try{ if(ldClient) ldClient.track("enable-player-login-screen-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track a successful callsign submission — the primary business event
+    // for this feature. Classified monitoring (net-new path; one-armed
+    // comparison would be structurally invalid as a gating signal).
+    try{ if(ldClient) ldClient.track("enable-player-login-screen-login-success"); }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
