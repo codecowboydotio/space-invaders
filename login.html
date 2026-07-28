@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GALACTIC DEFENDER // LOGIN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#050807;
+    --panel:#0b1410;
+    --phosphor:#3dff6e;
+    --phosphor-dim:#154a25;
+    --amber:#ffb300;
+    --danger:#ff3b52;
+    --wire:#123321;
+    --glass: rgba(61,255,110,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    padding:0;
+    background:var(--bg);
+    color:var(--phosphor);
+    font-family:'Press Start 2P', monospace;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:18px 12px 40px;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(61,255,110,0.05), transparent 60%),
+      var(--bg);
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .cabinet-title{
+    letter-spacing:2px;
+    font-size:clamp(14px,3.6vw,26px);
+    color:var(--phosphor);
+    text-shadow:0 0 6px var(--phosphor), 0 0 18px rgba(61,255,110,0.5);
+    margin:6px 0 2px;
+    text-align:center;
+  }
+  .cabinet-sub{
+    font-size:9px;
+    color:var(--amber);
+    letter-spacing:3px;
+    opacity:0.85;
+    margin-bottom:14px;
+    text-align:center;
+    animation:blink 1.4s steps(1) infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:0.85;} 50%{opacity:0.2;} }
+
+  .cabinet{
+    position:relative;
+    width:100%;
+    max-width:min(520px, 96vw);
+    background:linear-gradient(180deg,#0d1712,#070b09);
+    border:3px solid var(--wire);
+    border-radius:14px;
+    padding:28px 22px;
+    box-shadow:
+      0 0 0 6px #030503,
+      0 0 40px rgba(61,255,110,0.08),
+      inset 0 0 30px rgba(0,0,0,0.6);
+    overflow:hidden;
+  }
+  /* faint scanlines over the whole panel for CRT feel */
+  .cabinet::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 1px,
+      rgba(0,0,0,0.16) 2px,
+      rgba(0,0,0,0.16) 3px
+    );
+    mix-blend-mode:multiply;
+  }
+
+  form{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    position:relative;
+    z-index:1;
+  }
+
+  label{
+    font-size:10px;
+    letter-spacing:1px;
+    color:var(--phosphor-dim);
+    text-align:center;
+    line-height:1.8;
+  }
+  label b{ color:var(--phosphor); }
+
+  .field{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border:2px solid var(--phosphor);
+    background:var(--glass);
+    border-radius:6px;
+    padding:12px 14px;
+    box-shadow:0 0 12px rgba(61,255,110,0.15), inset 0 0 12px rgba(0,0,0,0.5);
+  }
+  .field .prompt{ color:var(--amber); font-size:12px; }
+  input[type="text"]{
+    flex:1;
+    min-width:0;
+    background:transparent;
+    border:0;
+    outline:0;
+    color:var(--phosphor);
+    font-family:'Press Start 2P', monospace;
+    font-size:12px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    text-shadow:0 0 6px rgba(61,255,110,0.6);
+    caret-color:var(--amber);
+  }
+  input[type="text"]::placeholder{
+    color:var(--phosphor-dim);
+    text-shadow:none;
+  }
+
+  .err{
+    min-height:12px;
+    font-size:8px;
+    letter-spacing:1px;
+    color:var(--danger);
+    text-shadow:0 0 6px rgba(255,59,82,0.6);
+    text-align:center;
+    visibility:hidden;
+  }
+  .err.show{ visibility:visible; }
+
+  .btn{
+    font-family:'Press Start 2P', monospace;
+    background:transparent;
+    border:2px solid var(--amber);
+    color:var(--amber);
+    padding:14px 16px;
+    font-size:11px;
+    letter-spacing:1px;
+    cursor:pointer;
+    box-shadow:0 0 12px rgba(255,179,0,0.25);
+    transition:transform 0.08s ease, background 0.15s ease;
+  }
+  .btn:hover{ background:rgba(255,179,0,0.1); }
+  .btn:active{ transform:scale(0.97); }
+
+  .hint{
+    margin-top:16px;
+    font-size:8px;
+    color:var(--phosphor-dim);
+    letter-spacing:1px;
+    text-align:center;
+    line-height:1.9;
+  }
+</style>
+</head>
+<body>
+
+  <div class="cabinet-title">GALACTIC DEFENDER</div>
+  <div class="cabinet-sub">// INSERT COIN //</div>
+
+  <div class="cabinet">
+    <form id="loginForm" autocomplete="off" novalidate>
+      <label>ENTER YOUR CALLSIGN, <b>PILOT</b></label>
+      <div class="field">
+        <span class="prompt">&gt;</span>
+        <input
+          type="text"
+          id="playerName"
+          name="playerName"
+          placeholder="ACE"
+          maxlength="12"
+          autofocus
+          aria-label="Player name">
+      </div>
+      <div class="err" id="err">CALLSIGN REQUIRED</div>
+      <button class="btn" type="submit">▶ ENTER THE FRAY</button>
+    </form>
+  </div>
+
+  <div class="hint">3 LETTERS OR MORE &nbsp;·&nbsp; A&ndash;Z 0&ndash;9</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_KEY = "galacticDefender.playerName";
+  const form = document.getElementById("loginForm");
+  const input = document.getElementById("playerName");
+  const err = document.getElementById("err");
+
+  // Pre-fill with a previously used callsign, if any.
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved) input.value = saved;
+  }catch(e){ /* storage may be unavailable (private mode) — ignore */ }
+
+  function showError(msg){
+    err.textContent = msg;
+    err.classList.add("show");
+  }
+  function clearError(){ err.classList.remove("show"); }
+
+  input.addEventListener("input", clearError);
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    const name = input.value.trim();
+
+    if(name.length < 3){
+      showError("CALLSIGN NEEDS 3+ CHARACTERS");
+      input.focus();
+      return;
+    }
+    if(!/^[A-Za-z0-9 _-]+$/.test(name)){
+      showError("USE A-Z, 0-9, SPACE, - OR _");
+      input.focus();
+      return;
+    }
+
+    try{ localStorage.setItem(STORAGE_KEY, name); }catch(e){ /* ignore */ }
+
+    // Hand the name to the game. localStorage is the primary channel;
+    // the query param is a fallback for when storage is blocked.
+    window.location.href = "invaders.html?player=" + encodeURIComponent(name);
+  });
+})();
+</script>
+</body>
+</html>

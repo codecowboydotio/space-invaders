@@ -276,6 +276,7 @@
 
   <div class="cabinet">
     <div class="hud">
+      <div><span class="label">PILOT </span><span class="val" id="pilotVal">—</span></div>
       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
@@ -317,6 +318,35 @@
   "use strict";
 
   /* ---------------------------------------------------------
+     PLAYER IDENTITY
+     The name is set on the login page (login.html), which passes
+     it via localStorage (primary) or a ?player= query param
+     (fallback). If neither is present, bounce back to the login
+     page so every session has a callsign.
+  --------------------------------------------------------- */
+  const PLAYER_STORAGE_KEY = "galacticDefender.playerName";
+
+  function resolvePlayerName(){
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = (params.get("player") || "").trim();
+    if(fromUrl){
+      try{ localStorage.setItem(PLAYER_STORAGE_KEY, fromUrl); }catch(e){ /* ignore */ }
+      return fromUrl;
+    }
+    try{
+      const saved = (localStorage.getItem(PLAYER_STORAGE_KEY) || "").trim();
+      if(saved) return saved;
+    }catch(e){ /* storage unavailable */ }
+    return "";
+  }
+
+  const playerName = resolvePlayerName();
+  if(!playerName){
+    window.location.replace("login.html");
+    return; // stop initializing the game; we're navigating away
+  }
+
+  /* ---------------------------------------------------------
      SPRITE SOURCES
      Sprites live as standalone .svg files under ./sprites/.
      This map is the single point where a sprite's file path is
@@ -352,7 +382,7 @@
     }
     ldClient = LDClient.initialize(
       LD_CLIENT_SIDE_ID,
-      { kind: "user", key: "anonymous-player", anonymous: true },
+      { kind: "user", key: playerName, name: playerName },
       { streaming: true } // explicit; also auto-enabled once we register .on('change')
     );
     try{
@@ -441,6 +471,7 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
+  const pilotEl = document.getElementById("pilotVal");
   const scoreEl = document.getElementById("scoreVal");
   const waveEl = document.getElementById("waveVal");
   const hiEl = document.getElementById("hiVal");
@@ -598,6 +629,7 @@
   }
 
   function updateHud(){
+    pilotEl.textContent = playerName;
     scoreEl.textContent = String(score).padStart(4,"0");
     waveEl.textContent = String(wave).padStart(2,"0");
     hiEl.textContent = String(Math.max(hiScore,score)).padStart(4,"0");
@@ -887,7 +919,7 @@
 
     spawnWave(wave);
     updateHud();
-    showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    showOverlay("WELCOME, " + playerName.toUpperCase(), "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
     requestAnimationFrame(loop);
   }
 
