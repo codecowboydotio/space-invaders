@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login-screen",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "String multivariate flag (control/v1). control=off serves original GALACTIC DEFENDER welcome overlay directly; v1 shows the callsign login form first. Evaluated post-initLaunchDarkly() with fail-safe default 'control'. No prerequisite: sprite flag (invaders-shooter-sprite) is already released and independent. setPlayerName()/ldClient.identify() runs in both paths so per-player sprite targeting is unaffected by this flag's state."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
