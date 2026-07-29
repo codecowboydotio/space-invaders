@@ -549,11 +549,15 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track login validation failure (v1 path only). Occurrence event — no metric value needed.
+      try{ if(ldClient) ldClient.track("show-player-login-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track successful callsign submission (v1 path only). Occurrence event — no metric value needed.
+    try{ if(ldClient) ldClient.track("show-player-login-login-success"); }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
