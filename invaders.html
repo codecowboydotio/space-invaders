@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_LOGIN = "enable-player-login";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -511,6 +512,10 @@
   const PLAYER_NAME_KEY = "galactic-defender-player";
   const MAX_NAME_LEN = 12;
   let playerName = "";
+  // Module-scope flag value so restartGame() can reference it without
+  // re-evaluating the flag. Set once in init() after ldClient is ready.
+  // Default is "control" (login disabled) — fail-safe while LD initializes.
+  let loginEnabled = false;
 
   // Strip anything that isn't a letter, number, space, dash or underscore so
   // the arcade font renders cleanly and nothing HTML-unsafe reaches the DOM.
@@ -746,7 +751,9 @@
   }
 
   function restartGame(){
-    loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
+    // Only dismiss the login overlay if the login feature is actually enabled;
+    // on control the overlay is never shown so there is nothing to dismiss.
+    if(loginEnabled) loginOverlay.style.display = "none";
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
@@ -985,17 +992,34 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+
+    // Evaluate the login gate AFTER ldClient is ready so targeting rules apply.
+    // Fail-safe default is "control" (login disabled) — matches the flag's off
+    // state and preserves existing behavior when the SDK is unavailable.
+    const loginVariation = ldClient
+      ? ldClient.variation(LD_FLAG_LOGIN, "control")
+      : "control";
+    loginEnabled = (loginVariation === "v1");
+
+    const saved = loadStoredName();
+
+    if(loginEnabled){
+      // --- v1: show the callsign login screen before the game overlay ---
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // --- control: skip login, go straight to the game title overlay ---
+      // loginOverlay stays display:none (set in markup); show the classic welcome screen.
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,9 +1045,11 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
+    // If the login feature is enabled and a callsign was stored from a
+    // previous session, reflect it in the HUD immediately and retarget the
+    // LD context to the named player (identify() is safe to call right after
+    // waitForInitialization resolves).
+    if(loginEnabled && saved) setPlayerName(saved);
     updateHud();
 
     requestAnimationFrame(loop);
