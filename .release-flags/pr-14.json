@@ -2,7 +2,10 @@
   "schemaVersion": "1.2",
   "flagKey": "show-player-login",
   "scope": "frontend",
-  "releasePlan": {},
+  "targetVariation": "v1",
+  "releasePlan": {
+    "notes": "Flag already existed as string multivariate with control+v1. v1 was unreleased. Code wired in invaders.html init(): after initLaunchDarkly(), evaluates show-player-login with fail-safe default 'control'. v1 path shows login overlay; control path calls showOverlay() directly restoring original start-screen behavior."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
