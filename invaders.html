@@ -548,11 +548,24 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation errors so the guarded release can detect regressions
+      // where the v1 login screen causes unexpected drop-off or confusion.
+      // Wrapped in try/catch so a tracking failure can never block the UI.
+      try{
+        if(ldClient) ldClient.track("show-player-login-screen-login-error", ldClient.getContext());
+      }catch(_){ /* telemetry must never break the game */ }
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track successful login completion — the primary business signal for the
+    // guarded release. Emitted on both the v1 and control paths when a login
+    // occurs; control users never see the overlay so this metric is v1-only in
+    // practice (one-armed), classified monitoring accordingly.
+    try{
+      if(ldClient) ldClient.track("show-player-login-screen-login-complete", ldClient.getContext());
+    }catch(_){ /* telemetry must never break the game */ }
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
