@@ -985,17 +985,20 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
+    // loginOverlay is display:none in markup — keep it hidden until we've
+    // evaluated the feature flag so the control path never flashes it in.
     const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
 
     await initLaunchDarkly();
+
+    // Evaluate the login feature flag (fail-safe default: "control").
+    // "control" → pre-PR behaviour: skip login, show start overlay directly.
+    // "v1"      → show the ENTER CALLSIGN screen (this PR's new behaviour).
+    const loginFlagValue = ldClient
+      ? ldClient.variation("show-player-login", "control")
+      : "control";
+    const loginEnabled = loginFlagValue === "v1";
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1020,11 +1023,29 @@
     subscribeToSpriteChanges();
 
     spawnWave(wave);
-
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
     updateHud();
+
+    if(loginEnabled){
+      // v1: show the ENTER CALLSIGN overlay.
+      // Pre-fill from localStorage so returning pilots skip re-typing.
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // If there's already a saved name, also identify with LD now that the
+      // client is ready (identify is a no-op when ldClient is null).
+      if(saved) setPlayerName(saved);
+    } else {
+      // control: pre-PR behaviour — skip login entirely and go straight to the
+      // classic GALACTIC DEFENDER start screen. The playerVal HUD element
+      // stays at its default "---" text (no callsign collected).
+      loginOverlay.style.display = "none";
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
 
     requestAnimationFrame(loop);
   }
