@@ -3,7 +3,13 @@
   "flagKey": "show-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag gates the player callsign login overlay. control=skip login (game starts directly, original pre-PR behaviour). v1=show ENTER CALLSIGN overlay, persist callsign to localStorage, re-identify LaunchDarkly context from anonymous-player to per-player key. The loginOverlay DOM element exists on both paths; control hides it via display:none. No prerequisite flags — login screen is net-new and does not depend on any upstream flag-gated capability."
+    "notes": "Flag gates the player callsign login overlay. control=skip login (game starts directly, original pre-PR behaviour). v1=show ENTER CALLSIGN overlay, persist callsign to localStorage, re-identify LaunchDarkly context from anonymous-player to per-player key. The loginOverlay DOM element exists on both paths; control hides it via display:none. No prerequisite flags — login screen is net-new and does not depend on any upstream flag-gated capability.",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "show-player-login-business",
+      "show-player-login-error"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
