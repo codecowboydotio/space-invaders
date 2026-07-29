@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_PLAYER_LOGIN = "show-player-login";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -985,17 +986,35 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+
+    // Evaluate the player-login flag after the SDK is ready so the decision is
+    // made with accurate flag state. Fails safe to "control" (no login) when
+    // the SDK is unavailable.
+    const loginVariation = ldClient
+      ? ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control")
+      : "control";
+    const showLogin = (loginVariation === "v1");
+
+    if(showLogin){
+      // v1: Show the callsign login overlay before the game starts.
+      // loginOverlay is display:none in markup, so the control path never
+      // flashes it in and back out.
+      const saved = loadStoredName();
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: Original behavior — show the welcome overlay directly,
+      // skip login entirely, and keep the anonymous LD context.
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,11 +1040,14 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    // v1 only: Now that the LD client exists, reflect any saved callsign in
+    // the HUD and retarget the LD context (identify() is a no-op without ldClient).
+    if(showLogin){
+      const saved = loadStoredName();
+      if(saved) setPlayerName(saved);
+    }
 
+    updateHud();
     requestAnimationFrame(loop);
   }
 
