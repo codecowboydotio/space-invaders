@@ -561,7 +561,8 @@
     );
   }
 
-  loginForm.addEventListener("submit", handleLogin);
+  // loginForm submit listener is registered conditionally inside init() after
+  // the flag is evaluated so it is a no-op when the login screen is off.
 
   let keys = {};
   // True while the player is typing in a text field (e.g. the login screen),
@@ -985,17 +986,38 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+
+    // ----- FEATURE FLAG: enable-player-login-screen -----
+    // control → original behaviour: show title overlay immediately, no login.
+    // v1      → new behaviour: capture callsign before the game starts.
+    // Fail-safe default is "control" so the flag being off / SDK unavailable
+    // always preserves the pre-PR experience.
+    const loginVariation = ldClient
+      ? ldClient.variation("enable-player-login-screen", "control")
+      : "control";
+    const loginEnabled = loginVariation === "v1";
+
+    if(loginEnabled){
+      // v1 PATH: show the callsign overlay.
+      // loginOverlay is display:none in markup, so there is no flash if the flag
+      // is off — the control path simply never touches it.
+      const saved = loadStoredName();
+      if(saved) nameInput.value = saved;
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // Wire the submit handler only when the screen is actually shown.
+      loginForm.addEventListener("submit", handleLogin);
+    } else {
+      // control PATH: original behaviour — show the title overlay directly.
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
+    // ---- end flag gate ----
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,11 +1043,15 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    if(loginEnabled){
+      // Now that the LD client exists, reflect any saved callsign in the HUD
+      // and retarget the LD context (identify() is a no-op until ldClient is
+      // ready — which it now is).
+      const saved = loadStoredName();
+      if(saved) setPlayerName(saved);
+    }
 
+    updateHud();
     requestAnimationFrame(loop);
   }
 
