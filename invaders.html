@@ -1010,18 +1010,35 @@
 
     spawnWave(wave);
 
-    // Show the login screen first. A previously saved callsign is pre-filled
-    // so returning pilots can just hit ENTER. The game overlay stays hidden
-    // until a valid callsign is entered.
-    const saved = loadStoredName();
-    if(saved){
-      nameInput.value = saved;
-      setPlayerName(saved); // reflect in HUD + LD context immediately
+    // Evaluate the login-screen flag. Fail-safe default is 'control' so that
+    // the original game start behavior is preserved when the SDK is unavailable
+    // or the flag has not yet been released.
+    function shouldShowLogin(){
+      if(!ldClient) return false;
+      const variation = ldClient.variation("show-player-login-screen", "control");
+      return (typeof variation === "string" ? variation : "control") === "v1";
     }
-    updateHud();
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
+
+    if(shouldShowLogin()){
+      // v1: Show the ENTER CALLSIGN overlay before the game start screen.
+      // A previously saved callsign is pre-filled so returning pilots can
+      // just hit ENTER. The game overlay stays hidden until login completes.
+      const saved = loadStoredName();
+      if(saved){
+        nameInput.value = saved;
+        setPlayerName(saved); // reflect in HUD + LD context immediately
+      }
+      updateHud();
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: Original behavior — skip login entirely and go straight to
+      // the game start overlay. The login overlay is kept hidden.
+      loginOverlay.style.display = "none";
+      updateHud();
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
 
     requestAnimationFrame(loop);
   }
