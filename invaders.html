@@ -985,17 +985,19 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
+    // Hide both overlays while the SDK initialises — neither should flash
+    // before we know which variation to serve.
     overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
+    loginOverlay.style.display = "none";
 
     await initLaunchDarkly();
+
+    // Evaluate the login feature flag now that ldClient is ready.
+    // Fail-safe default is "control" (skip login, go straight to title screen).
+    const loginFeature = ldClient
+      ? ldClient.variation("show-player-login", "control")
+      : "control";
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1020,11 +1022,26 @@
     subscribeToSpriteChanges();
 
     spawnWave(wave);
-
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
     updateHud();
+
+    if(loginFeature === "v1"){
+      // v1: show the ENTER CALLSIGN overlay before revealing the title screen.
+      // Pre-fill any saved callsign and update the LD context.
+      const saved = loadStoredName();
+      if(saved){
+        nameInput.value = saved;
+        setPlayerName(saved);   // updates HUD + ldClient.identify()
+      }
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: skip login entirely — same behavior as before this PR.
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
 
     requestAnimationFrame(loop);
   }
