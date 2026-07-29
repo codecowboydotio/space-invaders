@@ -549,11 +549,15 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation error — guarded-release signal for the login form path.
+      try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track successful callsign submission — business metric for the guarded release.
+    try{ if(ldClient) ldClient.track("enable-player-login-login-success"); }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
