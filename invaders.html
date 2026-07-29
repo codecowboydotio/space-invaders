@@ -549,12 +549,21 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation failure so the guarded release can detect a
+      // confusing login form. Best-effort: never block on telemetry.
+      try{
+        if(ldClient) ldClient.track("enable-player-login-screen-login-error", ldClient.getContext());
+      }catch(_){ /* telemetry must never fail the request */ }
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission (v1 path only).
+    try{
+      if(ldClient) ldClient.track("enable-player-login-screen-login-success", ldClient.getContext());
+    }catch(_){ /* telemetry must never fail the request */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
@@ -751,6 +760,11 @@
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
+    // Track game start on BOTH flag variations (control and v1) so the
+    // guarded release can compare engagement rates across audiences.
+    try{
+      if(ldClient) ldClient.track("enable-player-login-screen-game-start", ldClient.getContext());
+    }catch(_){ /* telemetry must never fail the request */ }
   }
 
   startBtn.addEventListener("click", ()=>{
