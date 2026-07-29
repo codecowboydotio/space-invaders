@@ -4,7 +4,12 @@
   "scope": "frontend",
   "targetVariation": "v1",
   "releasePlan": {
-    "notes": "Flag flag_action was create (conflict=reuse of existing flag). The v1 variation gates the login screen; control restores the pre-PR behavior of jumping straight to the GALACTIC DEFENDER start overlay. Evaluated via ldClient.variation('show-player-login-screen', 'control') === 'v1' after initLaunchDarkly() completes, so the SDK is always ready before the gate is checked. loginOverlay is display:none in markup — no flash on control path."
+    "notes": "Flag flag_action was create (conflict=reuse of existing flag). The v1 variation gates the login screen; control restores the pre-PR behavior of jumping straight to the GALACTIC DEFENDER start overlay. Evaluated via ldClient.variation('show-player-login-screen', 'control') === 'v1' after initLaunchDarkly() completes, so the SDK is always ready before the gate is checked. loginOverlay is display:none in markup — no flash on control path.",
+    "metricKeys": [
+      "show-player-login-screen-error",
+      "show-player-login-screen-login-success"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
