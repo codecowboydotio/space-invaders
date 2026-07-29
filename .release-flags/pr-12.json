@@ -4,7 +4,12 @@
   "scope": "frontend",
   "releasePlan": {
     "notes": "Flag gates the player callsign login overlay. control=off serves the original title screen directly (invaders-shooter-sprite flag still evaluates against anonymous-player context). v1=on shows the login overlay; after submit, ldClient.identify() re-targets the LD streaming connection to the named player so flags like invaders-shooter-sprite can be evaluated per-callsign. loginEnabled is evaluated once post-initLaunchDarkly() and stored module-scope so restartGame() can reference it. Fail-safe default is 'control'.",
-    "randomizationUnit": "user"
+    "randomizationUnit": "user",
+    "metricKeys": [
+      "enable-player-login-error",
+      "enable-player-login-success",
+      "enable-player-login-latency"
+    ]
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
