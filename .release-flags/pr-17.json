@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "No prerequisites. Control path restores the original showOverlay('GALACTIC DEFENDER', ...) call that was removed by the PR; v1 path shows the new callsign login form. The invaders-shooter-sprite flag is a peer (not a prerequisite) — its context changes when setPlayerName calls ldClient.identify() on login, which is expected and safe."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
