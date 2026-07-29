@@ -548,11 +548,21 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track login validation error (empty callsign submitted).
+      // Best-effort: never let telemetry block the UX.
+      try{
+        if(ldClient) ldClient.track("enable-player-login-screen-error", ldClient.getContext());
+      }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track successful callsign submission — the feature's primary success signal.
+    // Best-effort: never let telemetry block the UX.
+    try{
+      if(ldClient) ldClient.track("enable-player-login-screen-login", ldClient.getContext());
+    }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
