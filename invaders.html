@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_PLAYER_LOGIN = "enable-player-login-screen";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -985,17 +986,24 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
+    // Load any saved callsign into the input so it's ready if the login screen
+    // is shown (no DOM visibility change yet — loginOverlay is display:none in
+    // the markup, so nothing is painted until the flag is evaluated below).
     const saved = loadStoredName();
     if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
 
     await initLaunchDarkly();
+
+    // -- FEATURE FLAG GATE -----------------------------------------------
+    // evaluate enable-player-login-screen (string multivariate: "control" | "v1")
+    // Fail-safe default is "control" so a missing/failed SDK never shows the
+    // unfinished login screen to all users.
+    const loginVariation = ldClient
+      ? ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control")
+      : "control";
+    const showLoginScreen = (loginVariation === "v1");
+    // -- END FLAG GATE ----------------------------------------------------
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,11 +1029,30 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    if(showLoginScreen){
+      // v1 — show the callsign entry overlay before the game starts.
+      // handleLogin() will call setPlayerName() and then showOverlay() once
+      // the pilot submits their callsign.
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // Re-identify the LD context now that the client is ready (no-op if no
+      // saved name, but harmless).
+      if(saved) setPlayerName(saved);
+    } else {
+      // control — original pre-login behaviour: skip the callsign form,
+      // go straight to the GALACTIC DEFENDER welcome overlay.
+      // Any previously saved callsign is still applied (for sprite targeting),
+      // but no login UI is shown.
+      if(saved) setPlayerName(saved);
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
 
+    updateHud();
     requestAnimationFrame(loop);
   }
 
