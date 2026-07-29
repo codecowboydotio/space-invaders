@@ -3,7 +3,12 @@
   "flagKey": "show-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag created as string multivariate (control/v1). Control path: original welcome overlay shown directly, anonymous LD context maintained. v1 path: callsign login overlay shown first; player name stored in localStorage, displayed in HUD, and used to re-identify the LD context via ldClient.identify(). Flag evaluated after await initLaunchDarkly() so targeting is accurate at evaluation time. restartGame() defensively hides loginOverlay unconditionally (no-op in control path). No prerequisites."
+    "notes": "Flag created as string multivariate (control/v1). Control path: original welcome overlay shown directly, anonymous LD context maintained. v1 path: callsign login overlay shown first; player name stored in localStorage, displayed in HUD, and used to re-identify the LD context via ldClient.identify(). Flag evaluated after await initLaunchDarkly() so targeting is accurate at evaluation time. restartGame() defensively hides loginOverlay unconditionally (no-op in control path). No prerequisites.",
+    "metricKeys": [
+      "show-player-login-login-success",
+      "show-player-login-login-error"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
