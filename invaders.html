@@ -549,11 +549,17 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation failure (v1 path only; control never shows this form).
+      // Best-effort: a tracking failure must never block the user action.
+      try{ if(ldClient) ldClient.track("show-player-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track successful callsign submission.
+    // Best-effort: a tracking failure must never block the user action.
+    try{ if(ldClient) ldClient.track("show-player-login-success"); }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
