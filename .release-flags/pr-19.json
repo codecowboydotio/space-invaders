@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "show-player-login-screen",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag gates the player callsign login screen (loginOverlay). control variation: login screen never shown, game goes straight to the GALACTIC DEFENDER title overlay (pre-PR behavior); PLAYER HUD field hidden. v1 variation: login overlay displayed after LD init, callsign captured, playerEl shown in HUD, ldClient.identify() called to re-target LD context per player. Evaluation is fail-safe: if ldClient is null (SDK unavailable), defaults to 'control'. Both overlays are display:none during LD init to avoid flash. The restartGame() guard (loginOverlay.style.display='none') remains harmless in both variations."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
