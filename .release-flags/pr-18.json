@@ -3,7 +3,12 @@
   "flagKey": "enable-player-login-screen",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag evaluates after await initLaunchDarkly() completes. control variation = pre-PR behaviour (title overlay shown directly, no callsign screen). v1 variation = new callsign login overlay shown first; ldClient.identify() retargets LD context to the player's callsign after login. loginOverlay HTML/CSS is always in the DOM but stays display:none under control — no flash. The loginForm submit listener is registered only in the v1 path. restartGame() guard (loginOverlay.style.display=none) is safe unconditionally. No prerequisite flags. Existing invaders-shooter-sprite flag is orthogonal and unaffected."
+    "notes": "Flag evaluates after await initLaunchDarkly() completes. control variation = pre-PR behaviour (title overlay shown directly, no callsign screen). v1 variation = new callsign login overlay shown first; ldClient.identify() retargets LD context to the player's callsign after login. loginOverlay HTML/CSS is always in the DOM but stays display:none under control — no flash. The loginForm submit listener is registered only in the v1 path. restartGame() guard (loginOverlay.style.display=none) is safe unconditionally. No prerequisite flags. Existing invaders-shooter-sprite flag is orthogonal and unaffected.",
+    "metricKeys": [
+      "enable-player-login-screen-error",
+      "enable-player-login-screen-login"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
