@@ -542,18 +542,34 @@
     }
   }
 
+  // Timestamp (ms) when the login overlay was shown — used to measure login latency.
+  let _loginShownAt = 0;
+
   function handleLogin(e){
     if(e) e.preventDefault();
     const name = sanitizeName(nameInput.value);
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation error — occurs when a player submits an empty callsign.
+      try{ if(ldClient) ldClient.track("show-player-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+
+    // Track successful login completion.
+    try{ if(ldClient) ldClient.track("show-player-login-success"); }catch(_){}
+
+    // Track login latency (ms from overlay shown to successful submit).
+    try{
+      if(ldClient && _loginShownAt > 0){
+        ldClient.track("show-player-login-latency", null, Date.now() - _loginShownAt);
+      }
+    }catch(_){}
+
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
@@ -1032,6 +1048,7 @@
         nameInput.value = saved;
         setPlayerName(saved);   // updates HUD + ldClient.identify()
       }
+      _loginShownAt = Date.now(); // record when login overlay appeared for latency tracking
       loginOverlay.style.display = "flex";
       nameInput.focus();
     } else {
