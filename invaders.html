@@ -548,12 +548,17 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation errors so we can detect a broken login form during
+      // the guarded rollout. Wrapped in try/catch so telemetry never blocks play.
+      try{ if(ldClient) ldClient.track("show-player-login-screen-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful logins for the guarded rollout business metric.
+    try{ if(ldClient) ldClient.track("show-player-login-screen-login-success"); }catch(_){}
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
