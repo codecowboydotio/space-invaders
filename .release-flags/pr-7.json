@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "show-player-login-screen",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag gates the ENTER CALLSIGN login overlay (v1). Control path preserves original showOverlay() startup call. loginForm submit listener is attached unconditionally but is harmless when loginOverlay is hidden (control path). No prerequisites needed — login screen is self-contained."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
