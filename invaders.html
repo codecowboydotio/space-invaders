@@ -548,12 +548,26 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track login validation error so the guarded release can detect UX friction.
+      // Emitted on the v1 (treatment) path only — a non-zero rate here signals
+      // that players are hitting a validation wall. Wrapped so tracking never fails a click.
+      try{
+        if(ldClient){
+          ldClient.track("enable-player-login-error", ldClient.getContext());
+        }
+      }catch(_){ /* telemetry must never break the game */ }
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission for the guarded release business metric.
+    try{
+      if(ldClient){
+        ldClient.track("enable-player-login-success", ldClient.getContext());
+      }
+    }catch(_){ /* telemetry must never break the game */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
