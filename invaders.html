@@ -516,6 +516,9 @@
   // re-evaluating the flag. Set once in init() after ldClient is ready.
   // Default is "control" (login disabled) — fail-safe while LD initializes.
   let loginEnabled = false;
+  // Timestamp (ms) recorded when the login overlay becomes visible; used to
+  // measure how long a player takes to complete the callsign entry flow.
+  let loginOverlayShownAt = 0;
 
   // Strip anything that isn't a letter, number, space, dash or underscore so
   // the arcade font renders cleanly and nothing HTML-unsafe reaches the DOM.
@@ -553,12 +556,26 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track validation error — pilot submitted with no callsign.
+      // Best-effort: a tracking failure must never block the flow.
+      try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){ /* ignore */ }
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign entry (business completion event).
+    // Best-effort: a tracking failure must never block the flow.
+    try{ if(ldClient) ldClient.track("enable-player-login-success"); }catch(_){ /* ignore */ }
+    // Track login flow duration (latency: ms from overlay shown to completion).
+    // Best-effort: a tracking failure must never block the flow.
+    try{
+      if(ldClient && loginOverlayShownAt > 0){
+        const elapsed = Date.now() - loginOverlayShownAt;
+        ldClient.track("enable-player-login-latency", null, elapsed);
+      }
+    }catch(_){ /* ignore */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
@@ -1009,6 +1026,7 @@
       if(saved) nameInput.value = saved;
       overlay.style.display = "none";
       loginOverlay.style.display = "flex";
+      loginOverlayShownAt = Date.now();
       nameInput.focus();
     } else {
       // --- control: skip login, go straight to the game title overlay ---
