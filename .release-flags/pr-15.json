@@ -3,7 +3,14 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Gates the pre-game callsign login overlay. control path (flag off): login screen never shown, existing GALACTIC DEFENDER start overlay shown immediately, any saved callsign is silently restored in the HUD. v1 path (flag on): ENTER CALLSIGN overlay shown after LD SDK init, callsign stored in localStorage under 'galactic-defender-player', LD context re-identified to callsign for per-player flag targeting. No prerequisites — feature is orthogonal to invaders-shooter-sprite. Note: when flag is off, LD context stays anonymous-player so per-player invaders-shooter-sprite targeting is inactive; expected control behavior."
+    "notes": "Gates the pre-game callsign login overlay. control path (flag off): login screen never shown, existing GALACTIC DEFENDER start overlay shown immediately, any saved callsign is silently restored in the HUD. v1 path (flag on): ENTER CALLSIGN overlay shown after LD SDK init, callsign stored in localStorage under 'galactic-defender-player', LD context re-identified to callsign for per-player flag targeting. No prerequisites — feature is orthogonal to invaders-shooter-sprite. Note: when flag is off, LD context stays anonymous-player so per-player invaders-shooter-sprite targeting is inactive; expected control behavior.",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "ld_autogen__telemetry-lcp-average",
+      "enable-player-login-error",
+      "enable-player-login-success"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
