@@ -3,7 +3,13 @@
   "flagKey": "show-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag evaluation moved post-initLaunchDarkly() (resolves race in original PR where loginOverlay was shown before ldClient was ready). Control path calls showOverlay('GALACTIC DEFENDER', ...) exactly as pre-PR. v1 path shows ENTER CALLSIGN overlay and calls ldClient.identify() per-player. No prerequisites; feature is self-contained."
+    "notes": "Flag evaluation moved post-initLaunchDarkly() (resolves race in original PR where loginOverlay was shown before ldClient was ready). Control path calls showOverlay('GALACTIC DEFENDER', ...) exactly as pre-PR. v1 path shows ENTER CALLSIGN overlay and calls ldClient.identify() per-player. No prerequisites; feature is self-contained.",
+    "metricKeys": [
+      "show-player-login-login-error",
+      "show-player-login-login-success",
+      "ld_autogen__telemetry-default-error-rate"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
