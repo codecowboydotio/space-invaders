@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_SHOW_LOGIN = "show-player-login";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -1010,18 +1011,37 @@
 
     spawnWave(wave);
 
-    // Show the login screen first. A previously saved callsign is pre-filled
-    // so returning pilots can just hit ENTER. The game overlay stays hidden
-    // until a valid callsign is entered.
-    const saved = loadStoredName();
-    if(saved){
-      nameInput.value = saved;
-      setPlayerName(saved); // reflect in HUD + LD context immediately
-    }
+    // Gate the login screen behind the "show-player-login" feature flag.
+    // control → skip the overlay, go straight to the game (original behaviour).
+    // v1     → show the ENTER CALLSIGN overlay (new behaviour).
+    const showLoginVariation = ldClient
+      ? ldClient.variation(LD_FLAG_SHOW_LOGIN, "control")
+      : "control";
+
     updateHud();
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
+
+    if(showLoginVariation === "v1"){
+      // v1: show the login screen. A previously saved callsign is pre-filled
+      // so returning pilots can just hit ENTER. The game overlay stays hidden
+      // until a valid callsign is entered.
+      const saved = loadStoredName();
+      if(saved){
+        nameInput.value = saved;
+        setPlayerName(saved); // reflect in HUD + LD context immediately
+      }
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: original direct-to-game behaviour — hide the login overlay
+      // and show the standard game-start screen immediately.
+      loginOverlay.style.display = "none";
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
 
     requestAnimationFrame(loop);
   }
