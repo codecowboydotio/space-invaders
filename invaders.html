@@ -405,6 +405,10 @@
       await ldClient.waitForInitialization(3);
     }catch(err){
       console.error("LaunchDarkly init failed, using default shooter sprite:", err);
+      // Track the SDK init failure as a guarded-release error signal.
+      // We attempt to flush with the partially-initialised client; if that
+      // also fails we swallow silently — telemetry must never break the game.
+      try{ ldClient.track("show-player-login-error"); ldClient.flush(); }catch(_){}
       ldClient = null;
     }
   }
@@ -555,6 +559,9 @@
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission for the guarded release.
+    // Best-effort: a tracking failure must never block the game flow.
+    try{ if(ldClient) ldClient.track("show-player-login-login-complete"); }catch(_){}
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
