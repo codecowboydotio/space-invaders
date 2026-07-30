@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "show-player-login",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag gates the arcade callsign login overlay. control variation: original flow, no login screen, game goes straight to GALACTIC DEFENDER start overlay. v1 variation: login overlay shown before game start, callsign captured, persisted to localStorage, LD context re-identified per player. Flag evaluated after await initLaunchDarkly() to avoid flash-of-login for control users. The existing invaders-shooter-sprite flag (already released in production) is unrelated and untouched; once a player identifies via login (v1), subsequent sprite flag evaluations will be per-player-callsign context."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
