@@ -985,17 +985,39 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
+    // Initialize the LD client first so we can evaluate the login-screen flag
+    // before deciding which UX path to take. The login overlay starts as
+    // display:none in the markup, so no flash occurs on the control path.
     await initLaunchDarkly();
+
+    // Gate the login screen behind the feature flag.
+    // Control ("control"): skip login, go straight to the title screen —
+    //   preserves the pre-PR game launch experience exactly.
+    // Treatment ("v1"): show the callsign entry overlay before the title screen.
+    const loginVariation = ldClient
+      ? ldClient.variation("show-player-login", "control")
+      : "control";
+    const showLogin = loginVariation === "v1";
+
+    const saved = loadStoredName();
+
+    if(showLogin){
+      // v1: show login overlay — player must enter a callsign before play.
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: bypass login, go straight to the title screen.
+      // Mirror the pre-PR init() behaviour exactly.
+      overlay.style.display = "none";
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,9 +1043,10 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
+    // Reflect any saved callsign in the HUD and retarget the LD context only
+    // when the login feature is active (v1). On the control path the player
+    // remains anonymous and the HUD shows "---".
+    if(showLogin && saved) setPlayerName(saved);
     updateHud();
 
     requestAnimationFrame(loop);
