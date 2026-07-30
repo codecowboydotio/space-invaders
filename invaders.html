@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_PLAYER_LOGIN = "show-player-login";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -985,17 +986,21 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
+    // Both overlays start display:none in markup. Keep them hidden until we
+    // know which one to show — this prevents any flash of unwanted content
+    // during the async SDK initialisation window.
     overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
+    loginOverlay.style.display = "none";
+
+    const saved = loadStoredName();
 
     await initLaunchDarkly();
+
+    // Evaluate the player-login flag now that the SDK is ready.
+    // Fail-safe default is "control" (existing behaviour: no login screen).
+    const loginVariation = ldClient ? ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control") : "control";
+    const showLogin = loginVariation === "v1";
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,11 +1026,23 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    if(showLogin){
+      // v1: show the callsign login overlay before the game start overlay.
+      // Pre-fill the input from localStorage if a name was saved previously.
+      if(saved) nameInput.value = saved;
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // If a name was already stored, still retarget the LD context so flag
+      // evaluations are per-player from the moment the game starts.
+      if(saved) setPlayerName(saved);
+    } else {
+      // control: original behaviour — skip login, go straight to the game
+      // start overlay. If a saved name exists, silently retarget LD context.
+      if(saved) setPlayerName(saved);
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
 
+    updateHud();
     requestAnimationFrame(loop);
   }
 
