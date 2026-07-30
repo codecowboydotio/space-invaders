@@ -4,7 +4,12 @@
   "scope": "frontend",
   "releasePlan": {
     "randomizationUnit": "user",
-    "notes": "Control path (flag off): skips login overlay entirely, shows original GALACTIC DEFENDER title screen immediately after LD init — exact pre-PR behavior. v1 path (flag on): shows callsign entry overlay, captures player name, persists to localStorage, updates HUD PLAYER display, and re-identifies the LD context per callsign. isTypingTarget() keyboard guard and restartGame() loginOverlay safety-close are unconditional (not flag-gated). The LD client is initialized before flag evaluation so variation() is available at the gating point."
+    "notes": "Control path (flag off): skips login overlay entirely, shows original GALACTIC DEFENDER title screen immediately after LD init — exact pre-PR behavior. v1 path (flag on): shows callsign entry overlay, captures player name, persists to localStorage, updates HUD PLAYER display, and re-identifies the LD context per callsign. isTypingTarget() keyboard guard and restartGame() loginOverlay safety-close are unconditional (not flag-gated). The LD client is initialized before flag evaluation so variation() is available at the gating point.",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "ld_autogen__telemetry-lcp-p95",
+      "show-player-login-login-completed"
+    ]
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
