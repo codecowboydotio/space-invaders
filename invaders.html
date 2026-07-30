@@ -555,6 +555,11 @@
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track callsign submission as a guarded-release business metric.
+    // Wrapped in try/catch so a telemetry failure never blocks the game.
+    try{
+      if(ldClient) ldClient.track("show-player-login-screen-callsign-submitted");
+    }catch(_){ /* best-effort telemetry — never break the game */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
