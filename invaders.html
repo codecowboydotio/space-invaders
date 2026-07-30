@@ -554,6 +554,11 @@
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission for guarded-release metric attribution.
+    // Best-effort: a telemetry failure must never break the login flow.
+    try{
+      if(ldClient) ldClient.track("show-player-login-login-completed");
+    }catch(_){ /* telemetry error — do not block the player */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
