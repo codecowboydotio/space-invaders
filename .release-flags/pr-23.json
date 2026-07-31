@@ -3,7 +3,13 @@
   "flagKey": "show-player-login-screen",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "String multivariate flag (control/v1). Evaluated in init() AFTER await initLaunchDarkly() to avoid the ordering risk identified in the brief. Control path restores the original showOverlay('GALACTIC DEFENDER',...) call that was removed by the PR. v1 path shows the loginOverlay and handles returning-player pre-fill + ldClient.identify(). All login DOM/CSS remains in markup unconditionally (no flash risk). restartGame() loginOverlay clear is unconditional (safe in both paths). Fail-safe default is 'control' so network failures never block the game."
+    "notes": "String multivariate flag (control/v1). Evaluated in init() AFTER await initLaunchDarkly() to avoid the ordering risk identified in the brief. Control path restores the original showOverlay('GALACTIC DEFENDER',...) call that was removed by the PR. v1 path shows the loginOverlay and handles returning-player pre-fill + ldClient.identify(). All login DOM/CSS remains in markup unconditionally (no flash risk). restartGame() loginOverlay clear is unconditional (safe in both paths). Fail-safe default is 'control' so network failures never block the game.",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "ld_autogen__telemetry-lcp-average",
+      "show-player-login-screen-business"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
