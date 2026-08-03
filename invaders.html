@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_PLAYER_LOGIN = "enable-player-login";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -985,17 +986,38 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
+    // Load any stored callsign so it is available for both flag paths below.
     const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
 
+    // Initialise the LD client first so we can evaluate the login flag.
+    // Both overlays are display:none in markup, so nothing flashes until we
+    // decide which screen to show.
     await initLaunchDarkly();
+
+    // Gate the login screen behind the enable-player-login flag.
+    // Fail-safe default is "control" (skip login) so a cold-start or SDK
+    // failure never leaves the player on a blank screen.
+    const loginVariation = ldClient
+      ? ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control")
+      : "control";
+
+    if (loginVariation === "v1") {
+      // v1: show the ENTER CALLSIGN overlay before the game start screen.
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: skip login entirely — restore the classic game start overlay.
+      loginOverlay.style.display = "none";
+      overlay.style.display = "none";
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
