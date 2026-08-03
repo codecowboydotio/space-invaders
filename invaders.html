@@ -542,17 +542,32 @@
     }
   }
 
+  // Timestamp (ms) when the login overlay was revealed; used to measure
+  // time-to-callsign-entry for the guarded-release latency metric.
+  let _loginShownAt = 0;
+
   function handleLogin(e){
     if(e) e.preventDefault();
     const name = sanitizeName(nameInput.value);
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Guarded-release: track login validation errors (occurrence metric).
+      // Telemetry failure must never disrupt the player experience.
+      try{ if(ldClient) ldClient.track("show-player-login-screen-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Guarded-release: track successful callsign capture (business occurrence).
+    try{ if(ldClient) ldClient.track("show-player-login-screen-login-completed"); }catch(_){}
+    // Guarded-release: track time from overlay shown to successful submission (ms).
+    try{
+      if(ldClient && _loginShownAt > 0){
+        ldClient.track("show-player-login-screen-latency", null, null, Date.now() - _loginShownAt);
+      }
+    }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
@@ -1013,6 +1028,7 @@
       overlay.style.display = "none";
       loginOverlay.style.display = "flex";
       nameInput.focus();
+      _loginShownAt = Date.now(); // start the latency clock for the guarded-release metric
     }
     // control: login screen stays hidden; game proceeds to start overlay below.
 
