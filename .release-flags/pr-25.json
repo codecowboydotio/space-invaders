@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "show-player-login-screen",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "String multivariate flag (control/v1). control=existing behaviour (no login screen, game goes straight to start overlay). v1=callsign capture overlay shown before game starts. Wired in init() after ldClient.waitForInitialization so the flag state is authoritative; loginOverlay stays display:none in markup to prevent any flash on the control path."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
