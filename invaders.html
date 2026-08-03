@@ -555,6 +555,9 @@
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission for guarded-release metric.
+    // Best-effort: a tracking failure must never break the game flow.
+    try{ if(ldClient) ldClient.track("enable-player-login-login-success"); }catch(_){ /* ignore */ }
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
