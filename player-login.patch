@@ -1,0 +1,234 @@
+From be483360039fa7af368a498d6e0c16b67d137b09 Mon Sep 17 00:00:00 2001
+From: Scott van Kalken <svankalken@launchdarkly.com>
+Date: Wed, 29 Jul 2026 11:29:34 +1000
+Subject: [PATCH] Add player login screen to capture callsign
+
+Adds an arcade-style login overlay that captures the player's name
+before the game starts. The callsign is sanitised, shown in the HUD,
+persisted to localStorage (pre-filled for returning pilots), and used
+as the LaunchDarkly context key so flags can target per-player.
+
+The login overlay is hidden in markup and revealed deterministically at
+the start of init(), so it never flashes on a control/disabled path, and
+restartGame() dismisses it so a game can't start behind it.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ invaders.html | 144 ++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 141 insertions(+), 3 deletions(-)
+
+diff --git a/invaders.html b/invaders.html
+index 43c0020..17c58cb 100644
+--- a/invaders.html
++++ b/invaders.html
+@@ -180,6 +180,39 @@
+   .btn.amber{ border-color:var(--amber); color:var(--amber); box-shadow:0 0 12px rgba(255,179,0,0.25);}
+   .btn.amber:hover{ background:rgba(255,179,0,0.1); }
+ 
++  /* ---------- LOGIN ---------- */
++  #loginForm{
++    display:flex;
++    flex-direction:column;
++    align-items:center;
++    gap:12px;
++    width:100%;
++  }
++  .name-input{
++    font-family:'Press Start 2P', monospace;
++    background:rgba(2,4,3,0.9);
++    border:2px solid var(--phosphor);
++    color:var(--phosphor);
++    text-align:center;
++    text-transform:uppercase;
++    letter-spacing:4px;
++    font-size:16px;
++    padding:12px 10px;
++    width:min(240px, 80%);
++    caret-color:var(--amber);
++    box-shadow:0 0 12px rgba(61,255,110,0.2), inset 0 0 8px rgba(0,0,0,0.6);
++    outline:none;
++  }
++  .name-input::placeholder{ color:var(--phosphor-dim); letter-spacing:4px; }
++  .name-input:focus{ box-shadow:0 0 16px rgba(61,255,110,0.45), inset 0 0 8px rgba(0,0,0,0.6); }
++  .login-error{
++    font-size:8px;
++    color:var(--danger);
++    letter-spacing:1px;
++    min-height:10px;
++    text-shadow:0 0 6px rgba(255,59,82,0.6);
++  }
++
+   .controls-hint{
+     margin-top:12px;
+     font-size:8px;
+@@ -276,6 +309,7 @@
+ 
+   <div class="cabinet">
+     <div class="hud">
++      <div><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
+       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
+       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
+       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
+@@ -287,7 +321,18 @@
+       <div class="scanlines"></div>
+       <div class="vignette"></div>
+       <div class="flicker"></div>
+-      <div class="overlay-msg" id="overlay">
++      <div class="overlay-msg" id="loginOverlay" style="display:none">
++        <h2>ENTER CALLSIGN</h2>
++        <p>Identify yourself, pilot. Your callsign is logged on the leaderboard.</p>
++        <form id="loginForm" autocomplete="off">
++          <input class="name-input" id="nameInput" type="text" maxlength="12"
++                 placeholder="AAA" aria-label="Player callsign"
++                 autocapitalize="characters" spellcheck="false" />
++          <div class="login-error" id="loginError"></div>
++          <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
++        </form>
++      </div>
++      <div class="overlay-msg" id="overlay" style="display:none">
+         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
+         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
+         <button class="btn amber" id="startBtn">▶ START GAME</button>
+@@ -441,6 +486,7 @@
+   const ctx = canvas.getContext("2d");
+   const W = canvas.width, H = canvas.height;
+ 
++  const playerEl = document.getElementById("playerVal");
+   const scoreEl = document.getElementById("scoreVal");
+   const waveEl = document.getElementById("waveVal");
+   const hiEl = document.getElementById("hiVal");
+@@ -450,14 +496,91 @@
+   const overlayText = document.getElementById("overlayText");
+   const startBtn = document.getElementById("startBtn");
+ 
++  const loginOverlay = document.getElementById("loginOverlay");
++  const loginForm = document.getElementById("loginForm");
++  const nameInput = document.getElementById("nameInput");
++  const loginError = document.getElementById("loginError");
++
++  /* ---------------------------------------------------------
++     PLAYER LOGIN
++     Captures the pilot's callsign before the game starts.
++     The name is sanitised, persisted to localStorage, shown in
++     the HUD, and used as the LaunchDarkly context key so flag
++     targeting can be per-player.
++  --------------------------------------------------------- */
++  const PLAYER_NAME_KEY = "galactic-defender-player";
++  const MAX_NAME_LEN = 12;
++  let playerName = "";
++
++  // Strip anything that isn't a letter, number, space, dash or underscore so
++  // the arcade font renders cleanly and nothing HTML-unsafe reaches the DOM.
++  function sanitizeName(raw){
++    return (raw || "")
++      .replace(/[^A-Za-z0-9 _-]/g, "")
++      .replace(/\s+/g, " ")
++      .trim()
++      .slice(0, MAX_NAME_LEN)
++      .toUpperCase();
++  }
++
++  function loadStoredName(){
++    try{ return sanitizeName(localStorage.getItem(PLAYER_NAME_KEY) || ""); }
++    catch(_){ return ""; }
++  }
++  function storeName(name){
++    try{ localStorage.setItem(PLAYER_NAME_KEY, name); }catch(_){ /* private mode */ }
++  }
++
++  function setPlayerName(name){
++    playerName = name;
++    playerEl.textContent = name || "---";
++    // Best-effort: retarget the LD context to this player so flags can be
++    // evaluated per-callsign. Failure here must never block play.
++    if(ldClient && name){
++      try{ ldClient.identify({ kind:"user", key: name, name: name }); }
++      catch(_){ /* keep the anonymous context */ }
++    }
++  }
++
++  function handleLogin(e){
++    if(e) e.preventDefault();
++    const name = sanitizeName(nameInput.value);
++    if(name.length < 1){
++      loginError.textContent = "CALLSIGN REQUIRED";
++      nameInput.focus();
++      return;
++    }
++    loginError.textContent = "";
++    setPlayerName(name);
++    storeName(name);
++    loginOverlay.style.display = "none";
++    showOverlay(
++      "GALACTIC DEFENDER",
++      "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
++      "▶ START GAME"
++    );
++  }
++
++  loginForm.addEventListener("submit", handleLogin);
++
+   let keys = {};
++  // True while the player is typing in a text field (e.g. the login screen),
++  // so game hotkeys don't hijack the keystrokes.
++  function isTypingTarget(e){
++    const t = e.target;
++    return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
++  }
+   window.addEventListener("keydown", (e)=>{
++    if(isTypingTarget(e)) return;
+     keys[e.code] = true;
+     if(e.code === "Space") e.preventDefault();
+     if(e.code === "KeyP") togglePause();
+     if(e.code === "KeyR") restartGame();
+   });
+-  window.addEventListener("keyup", (e)=>{ keys[e.code] = false; });
++  window.addEventListener("keyup", (e)=>{
++    if(isTypingTarget(e)) return;
++    keys[e.code] = false;
++  });
+ 
+   /* ---------------------------------------------------------
+      TOUCH CONTROLS
+@@ -623,6 +746,7 @@
+   }
+ 
+   function restartGame(){
++    loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
+     resetGame();
+     state = STATE.PLAYING;
+     hideOverlay();
+@@ -861,6 +985,16 @@
+      INIT
+   --------------------------------------------------------- */
+   async function init(){
++    // Reveal the login screen immediately — before any async SDK work — so it
++    // shows deterministically from JS. loginOverlay is display:none in markup,
++    // so if the feature is ever gated off, the control path never flashes it
++    // in and back out.
++    const saved = loadStoredName();
++    if(saved) nameInput.value = saved;
++    overlay.style.display = "none";
++    loginOverlay.style.display = "flex";
++    nameInput.focus();
++
+     await initLaunchDarkly();
+     const shipPath = currentShooterSpritePath();
+ 
+@@ -886,8 +1020,12 @@
+     subscribeToSpriteChanges();
+ 
+     spawnWave(wave);
++
++    // Now that the LD client exists, reflect any saved callsign in the HUD and
++    // retarget the LD context (identify() is a no-op until ldClient is ready).
++    if(saved) setPlayerName(saved);
+     updateHud();
+-    showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
++
+     requestAnimationFrame(loop);
+   }
+ 
+-- 
+2.50.1 (Apple Git-155)
+
