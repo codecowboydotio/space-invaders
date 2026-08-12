@@ -553,6 +553,10 @@
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
+    // Track: player successfully submitted callsign and reached the game start
+    // screen (v1 treatment arm). Paired with the control-path emit below so the
+    // guarded release has a real two-armed business metric comparison.
+    try{ if(ldClient) ldClient.track("show-player-login-game-started"); }catch(_){}
     loginOverlay.style.display = "none";
     showOverlay(
       "GALACTIC DEFENDER",
@@ -1010,6 +1014,10 @@
       // the HUD PLAYER field and LD context stay consistent for returning players,
       // but the blocking overlay is never shown.
       if(saved) setPlayerName(saved);
+      // Track: control arm reaches the START GAME overlay without a login screen.
+      // Paired with the v1-path emit in handleLogin() to produce a two-armed
+      // business metric the guarded release can compare.
+      try{ if(ldClient) ldClient.track("show-player-login-game-started"); }catch(_){}
       showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
     }
 
