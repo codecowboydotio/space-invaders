@@ -985,17 +985,36 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
+    // Phase 1: initialise the LD SDK first so we can evaluate flags before
+    // deciding which overlay to show. The login overlay stays display:none in
+    // markup during this window — no flash-in / flash-out risk.
     await initLaunchDarkly();
+
+    // Phase 2: evaluate the show-player-login flag.
+    // control → skip the login screen; go straight to the START GAME overlay.
+    // v1      → show the ENTER CALLSIGN overlay and gate the game behind it.
+    const showLogin = ldClient
+      ? ldClient.variation("show-player-login", "control") === "v1"
+      : false; // fail-safe: control path when SDK is unavailable
+
+    const saved = loadStoredName();
+
+    if(showLogin){
+      // v1 treatment: reveal the login overlay and wait for the player to submit.
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control path: no login overlay; restore any saved callsign silently so
+      // the HUD PLAYER field and LD context stay consistent for returning players,
+      // but the blocking overlay is never shown.
+      if(saved) setPlayerName(saved);
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
+
+    // Phase 3: load sprites (runs in parallel regardless of flag state so the
+    // game assets are ready whether the player is on the login screen or not).
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1016,14 +1035,10 @@
       console.error("Sprite load failed:", err);
     }
 
-    // From here on, flag changes stream in and hot-swap the ship sprite live.
+    // Phase 4: subscribe to live flag changes and start the game loop.
     subscribeToSpriteChanges();
 
     spawnWave(wave);
-
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
     updateHud();
 
     requestAnimationFrame(loop);
