@@ -384,6 +384,7 @@
   --------------------------------------------------------- */
   const LD_CLIENT_SIDE_ID = "6a18ce589e55d80b057c64e2"; // production environment
   const LD_FLAG_SHOOTER_SPRITE = "invaders-shooter-sprite";
+  const LD_FLAG_LOGIN = "enable-player-login-screen";
   const DEFAULT_SHIP_PATH = "sprites/ship.svg"; // pristine fallback (never mutated)
 
   // Kept alive for the lifetime of the page so the streaming connection stays
@@ -985,17 +986,11 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
+    // Initialise the LD SDK first so flag variations are available before we
+    // decide which overlay to present. Both paths (login + menu) wait until
+    // the SDK resolves (max 3 s timeout) so they each get accurate targeting.
     await initLaunchDarkly();
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,11 +1016,34 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    // --- Feature flag: enable-player-login-screen ---
+    // v1  → show the callsign login overlay before the game menu.
+    // control (default) → skip login; show the game menu directly (original behavior).
+    // Fail-safe default "control" means the login screen is DARK until explicitly
+    // enabled in LaunchDarkly — deploying this code never changes existing behavior.
+    const showLogin = ldClient
+      ? ldClient.variation(LD_FLAG_LOGIN, "control") === "v1"
+      : false;
 
+    if(showLogin){
+      // v1: present the callsign capture form before the game menu.
+      const saved = loadStoredName();
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // Reflect any saved callsign in the HUD and retarget the LD context now
+      // that the client is ready.
+      if(saved) setPlayerName(saved);
+    } else {
+      // control: original behavior — skip login, show the game menu directly.
+      // loginOverlay stays display:none (set in markup); never flash it.
+      loginOverlay.style.display = "none";
+      overlay.style.display = "none";
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
+
+    updateHud();
     requestAnimationFrame(loop);
   }
 
