@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login-screen",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag gates the callsign login overlay in init(). Control path (flag off): loginOverlay stays display:none, showOverlay() shows game menu directly — original behavior preserved exactly. v1 path (flag on): login overlay shown, callsign captured, sanitized, stored in localStorage, displayed in PLAYER HUD, used as LD context key via ldClient.identify(). Evaluation uses string variation with fail-safe default 'control' so deploy is dark until flag is turned on in LaunchDarkly. Constant LD_FLAG_LOGIN added near other flag constants for consistency with existing codebase pattern."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
