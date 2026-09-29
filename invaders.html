@@ -985,17 +985,30 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
+    // Evaluate the login-screen feature flag AFTER LD initialises so we get
+    // the real targeting value. Both overlays start as display:none in markup,
+    // so the control path never flashes the login form in and back out.
     await initLaunchDarkly();
+
+    // STRING multivariate flag: "v1" = show login screen, "control" (default)
+    // = skip it and show the start overlay directly (original behaviour).
+    const loginEnabled = ldClient
+      ? ldClient.variation("enable-player-login", "control") === "v1"
+      : false;
+
+    const saved = loadStoredName();
+
+    if(loginEnabled){
+      // v1: show callsign form before the game starts.
+      if(saved) nameInput.value = saved;
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: preserve original behaviour — skip login, show start overlay.
+      loginOverlay.style.display = "none";
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,9 +1034,20 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
+    if(loginEnabled){
+      // v1: if there's a stored name, reflect it in the HUD and retarget LD.
+      // The start overlay will be shown by handleLogin() after the form submit.
+      if(saved) setPlayerName(saved);
+    } else {
+      // control: no login screen — apply any stored name silently, then show
+      // the start overlay exactly as the original code did.
+      if(saved) setPlayerName(saved);
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
     updateHud();
 
     requestAnimationFrame(loop);
