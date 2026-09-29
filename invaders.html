@@ -548,12 +548,18 @@
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
       nameInput.focus();
+      // Track login validation error (empty/invalid callsign). Emitted on both
+      // v1 and control paths — but only reachable when the login form is shown
+      // (v1). Safe to call regardless of ldClient availability.
+      try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){}
       return;
     }
     loginError.textContent = "";
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Track successful callsign submission (login completed).
+    try{ if(ldClient) ldClient.track("enable-player-login-login-completed"); }catch(_){}
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
