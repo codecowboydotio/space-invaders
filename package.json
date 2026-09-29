@@ -1,0 +1,13 @@
+{
+  "name": "galactic-defender",
+  "version": "1.0.0",
+  "description": "Space Invaders style browser game",
+  "private": true,
+  "scripts": {
+    "test": "jest --testEnvironment jsdom --no-coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
