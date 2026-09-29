@@ -985,17 +985,20 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
+    // Keep both overlays hidden while the SDK initialises so there is no
+    // flash of unstyled / wrong content before we know which variation to serve.
+    loginOverlay.style.display = "none";
     overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
 
     await initLaunchDarkly();
+
+    // ---------- show-player-login flag ----------
+    // control → skip login, go straight to the main menu overlay.
+    // v1      → show the callsign entry screen before the game starts.
+    const loginVariation = ldClient
+      ? ldClient.variation("show-player-login", "control")
+      : "control";
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1020,11 +1023,28 @@
     subscribeToSpriteChanges();
 
     spawnWave(wave);
-
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
     updateHud();
+
+    if(loginVariation === "v1"){
+      // v1: show the callsign entry screen.
+      // Pre-fill from localStorage if a name was saved on a previous visit.
+      const saved = loadStoredName();
+      if(saved) nameInput.value = saved;
+      // Reflect a pre-existing saved name in the HUD and retarget LD context
+      // now that ldClient is ready (identify() requires the client to exist).
+      if(saved) setPlayerName(saved);
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+      // showOverlay() is called by handleLogin() after the player submits.
+    } else {
+      // control: no login screen — go straight to the main menu overlay.
+      loginOverlay.style.display = "none";
+      showOverlay(
+        "GALACTIC DEFENDER",
+        "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+        "▶ START GAME"
+      );
+    }
 
     requestAnimationFrame(loop);
   }
