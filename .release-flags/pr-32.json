@@ -3,7 +3,14 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag gates the new callsign login overlay in init(). control variation: skip login, show start overlay directly (original behavior). v1 variation: show login form, persist name to localStorage, retarget LD context to named pilot. Flag evaluated after ldClient.waitForInitialization(3) so real targeting applies. Both overlays start display:none in markup — no flash on either path."
+    "notes": "Flag gates the new callsign login overlay in init(). control variation: skip login, show start overlay directly (original behavior). v1 variation: show login form, persist name to localStorage, retarget LD context to named pilot. Flag evaluated after ldClient.waitForInitialization(3) so real targeting applies. Both overlays start display:none in markup — no flash on either path. Global autogen metrics guard the release (net_new feature path); feature-specific metrics are monitoring-only.",
+    "metricKeys": [
+      "ld_autogen__telemetry-default-error-rate",
+      "ld_autogen__telemetry-lcp-average",
+      "enable-player-login-error",
+      "enable-player-login-business"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
