@@ -431,6 +431,34 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release metrics for the login flag
+     Custom events sent on the SAME LD client/context the flag is
+     evaluated on, emitted under BOTH control and v1 so the release
+     can compare them. Telemetry only: never alters game behaviour
+     and never throws.
+       enable-player-login-screen-error        uncaught JS error / unhandled rejection
+       enable-player-login-screen-game-started first game started from the start menu
+  --------------------------------------------------------- */
+  let loginErrorTracked = false;   // one occurrence per page session is enough
+  let gameStartTracked = false;    // only the first game start from the menu
+
+  function trackPlayerLoginError(){
+    if(loginErrorTracked || !ldClient) return;
+    loginErrorTracked = true;
+    try{ ldClient.track("enable-player-login-screen-error"); }catch(_){ /* telemetry must never break play */ }
+  }
+  // Passive listeners: no preventDefault, so default error reporting is unchanged.
+  // Non-capturing 'error' ignores resource-load errors (fonts/sprites).
+  window.addEventListener("error", trackPlayerLoginError);
+  window.addEventListener("unhandledrejection", trackPlayerLoginError);
+
+  function trackPlayerLoginGameStarted(){
+    if(gameStartTracked || !ldClient) return;
+    gameStartTracked = true;
+    try{ ldClient.track("enable-player-login-screen-game-started"); }catch(_){ /* telemetry must never break play */ }
+  }
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -774,6 +802,7 @@
   }
 
   function restartGame(){
+    if(state === STATE.MENU) trackPlayerLoginGameStarted(); // guarded-release business signal (both variations)
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
