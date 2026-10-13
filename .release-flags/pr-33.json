@@ -3,7 +3,12 @@
   "flagKey": "enable-player-login-screen",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Fresh string-multivariate flag (control = original start-menu flow, v1 = callsign login screen + PLAYER HUD + identify()). Flag is evaluated once in init() after LD init and before any identify(), with no change: subscription, so it cannot flip mid-session. ROLLOUT CAVEAT: every visitor initializes LD with the hard-coded context key 'anonymous-player', so percentage rollouts/experiments bucket all users identically; only all-on/all-off releases are meaningful until a per-device anonymous key is used. v1 identify() uses the raw callsign as a non-anonymous context key (privacy / collisions / MAU) - reviewer call-out."
+    "notes": "Fresh string-multivariate flag (control = original start-menu flow, v1 = callsign login screen + PLAYER HUD + identify()). Flag is evaluated once in init() after LD init and before any identify(), with no change: subscription, so it cannot flip mid-session. ROLLOUT CAVEAT: every visitor initializes LD with the hard-coded context key 'anonymous-player', so percentage rollouts/experiments bucket all users identically; only all-on/all-off releases are meaningful until a per-device anonymous key is used. v1 identify() uses the raw callsign as a non-anonymous context key (privacy / collisions / MAU) - reviewer call-out.",
+    "metricKeys": [
+      "enable-player-login-screen-error-rate",
+      "enable-player-login-screen-game-start"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
