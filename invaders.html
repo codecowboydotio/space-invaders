@@ -433,6 +433,48 @@
     return playerLoginVariation() === "v1";
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release metrics for enable-player-login
+     (AutoFactory). Emitted on BOTH variations so the release can
+     compare control vs v1. Pure telemetry: every call is a no-op
+     when the SDK is unavailable and can never throw into the game.
+     Event keys are literal strings on purpose (must match the
+     LaunchDarkly metric definitions exactly).
+  --------------------------------------------------------- */
+  let playerLoginEntryTracked = false;
+
+  // Fired once per page, the moment the player gets past the FIRST screen:
+  //   control → START GAME from the menu
+  //   v1      → successful callsign submit (or bypassing the login via restart)
+  // Must be called BEFORE any identify() so the events stay on the same
+  // (anonymous) context that evaluated the flag.
+  function trackPlayerLoginEntry(){
+    if(playerLoginEntryTracked || !ldClient) return;
+    playerLoginEntryTracked = true;
+    try{
+      const elapsedMs = Math.max(0, Math.round(
+        (typeof performance !== "undefined" && performance.now) ? performance.now() : 0
+      ));
+      ldClient.track("enable-player-login-entry");
+      ldClient.track("enable-player-login-time-to-entry", undefined, elapsedMs);
+    }catch(_){ /* telemetry must never break the game */ }
+  }
+
+  // Counts uncaught errors / unhandled promise rejections on the page
+  // after the flag has been evaluated (both variations).
+  function trackPlayerLoginError(){
+    if(!ldClient) return;
+    try{ ldClient.track("enable-player-login-error"); }
+    catch(_){ /* telemetry must never break the game */ }
+  }
+
+  function installPlayerLoginErrorTracking(){
+    try{
+      window.addEventListener("error", trackPlayerLoginError);
+      window.addEventListener("unhandledrejection", trackPlayerLoginError);
+    }catch(_){ /* telemetry must never break the game */ }
+  }
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -583,6 +625,7 @@
       return;
     }
     loginError.textContent = "";
+    trackPlayerLoginEntry(); // before setPlayerName() → identify(): keep the flag's context
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -778,6 +821,7 @@
   }
 
   function restartGame(){
+    if(state === STATE.MENU) trackPlayerLoginEntry(); // telemetry only; no-op after the first call
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
@@ -1024,6 +1068,7 @@
     // feature mid-session. Falls back to "control" if LD is unavailable.
     const loginEnabled = isPlayerLoginEnabled();
     const saved = loginEnabled ? loadStoredName() : "";
+    installPlayerLoginErrorTracking(); // guarded-release error metric (both variations)
 
     // v1 only: reveal the login screen (loginOverlay is display:none in markup,
     // so the control path never shows it). Skip if the player already started
