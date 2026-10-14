@@ -436,6 +436,21 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     GUARDED-RELEASE TELEMETRY — "enable-player-login"
+     Custom events feeding the guarded-release metrics. Observe-only:
+     listeners never preventDefault/stopPropagation and every track()
+     call is wrapped so a telemetry failure can never affect the game.
+     Emitted on BOTH variations (control and v1) so the release can
+     compare them. Event keys are literal strings on purpose.
+  --------------------------------------------------------- */
+  window.addEventListener("error", ()=>{
+    try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){ /* telemetry only */ }
+  });
+  window.addEventListener("unhandledrejection", ()=>{
+    try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){ /* telemetry only */ }
+  });
+
   // Fetches a sprite path and hot-swaps the live ship sprite. On failure the
   // current sprite is kept, so a bad flag value never breaks the game.
   async function applyShipSpriteFromPath(path){
@@ -563,9 +578,15 @@
       try{
         const p = ldClient.identify({ kind:"user", key: name, name: name });
         // identify() returns a Promise; swallow async rejections too.
-        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+        if(p && typeof p.catch === "function") p.catch(()=>{
+          // keep the anonymous context; record the failure for the guarded release
+          try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){ /* telemetry only */ }
+        });
       }
-      catch(_){ /* keep the anonymous context */ }
+      catch(_){
+        // keep the anonymous context; record the failure for the guarded release
+        try{ if(ldClient) ldClient.track("enable-player-login-error"); }catch(_){ /* telemetry only */ }
+      }
     }
   }
 
@@ -578,6 +599,10 @@
       return;
     }
     loginError.textContent = "";
+    // Tracked BEFORE setPlayerName() so the event is attributed to the
+    // anonymous context that evaluated "enable-player-login" (identify()
+    // switches the context to the callsign).
+    try{ if(ldClient) ldClient.track("enable-player-login-login-completed"); }catch(_){ /* telemetry only */ }
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -774,6 +799,10 @@
 
   function restartGame(){
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
+    // Guarded-release signal (both variations): first game started from the menu.
+    if(state === STATE.MENU){
+      try{ if(ldClient) ldClient.track("enable-player-login-game-started"); }catch(_){ /* telemetry only */ }
+    }
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
