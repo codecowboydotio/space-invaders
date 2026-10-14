@@ -22,5 +22,8 @@
     "reference": "",
     "approvedBy": "",
     "notes": ""
+  },
+  "humanInput": {
+    "question": "The enable-player-login guardrails can't measure anything yet. invaders.html initialises LaunchDarkly with ONE shared context ({kind:'user', key:'anonymous-player'}), so every visitor is the same 'user' unit. On top of that, v1's identify() swaps that context for {kind:'user', key:<callsign>}, so events sent after login (and, for returning players with a saved callsign, the login-completed event too) land on a context that never evaluated this flag. Both fixes change the LaunchDarkly context schema, which affects MAU billing and how the invaders-shooter-sprite flag is bucketed, so I need you to choose one. Reply with one of these: (B) RECOMMENDED: keep the user context exactly as it is today, add an anonymous 'device' kind ({kind:'multi', user:{...unchanged}, device:{anonymous:true}}, which gets an SDK-generated stable per-device key), carry the same device key through identify(), and set releasePlan.randomizationUnit='device'. invaders-shooter-sprite is unaffected. Costs: one extra MAU per device, and the 'device' context kind must be marked available for experiments. (A) Drop key:'anonymous-player' so the user context gets a per-device key, keep unit 'user', and leave identify() as it is. This re-buckets invaders-shooter-sprite, and v1 stays under-attributed after login. (C) Don't change the context; keep the four track() metrics as monitoring only and release without an automated guardrail."
   }
 }
