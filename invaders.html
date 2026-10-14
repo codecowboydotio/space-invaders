@@ -309,7 +309,7 @@
 
   <div class="cabinet">
     <div class="hud">
-      <div><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
+      <div id="playerHud" style="display:none"><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
@@ -332,7 +332,7 @@
           <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
         </form>
       </div>
-      <div class="overlay-msg" id="overlay" style="display:none">
+      <div class="overlay-msg" id="overlay">
         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
         <button class="btn amber" id="startBtn">▶ START GAME</button>
@@ -406,6 +406,30 @@
       console.error("LaunchDarkly init failed, using default shooter sprite:", err);
       ldClient = null;
     }
+  }
+
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — player login flag
+     Multivariate string flag ("control" | "v1" | ...). "v1"
+     shows the ENTER CALLSIGN login screen, the PLAYER HUD cell
+     and retargets the LD context to the callsign. Anything else
+     (including "control", an absent flag, or no LD client)
+     keeps the original start-screen behavior.
+  --------------------------------------------------------- */
+  const LD_FLAG_PLAYER_LOGIN = "show-player-login";
+
+  function playerLoginVariation(){
+    if(!ldClient) return "control";
+    try{
+      const value = ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control");
+      return (typeof value === "string" && value) ? value : "control";
+    }catch(_){
+      return "control";
+    }
+  }
+
+  function isPlayerLoginEnabled(){
+    return playerLoginVariation() === "v1";
   }
 
   function currentShooterSpritePath(){
@@ -486,6 +510,7 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
+  const playerHud = document.getElementById("playerHud");
   const playerEl = document.getElementById("playerVal");
   const scoreEl = document.getElementById("scoreVal");
   const waveEl = document.getElementById("waveVal");
@@ -536,8 +561,13 @@
     playerEl.textContent = name || "---";
     // Best-effort: retarget the LD context to this player so flags can be
     // evaluated per-callsign. Failure here must never block play.
-    if(ldClient && name){
-      try{ ldClient.identify({ kind:"user", key: name, name: name }); }
+    // Only under the "v1" variation of show-player-login; control keeps the
+    // anonymous context untouched.
+    if(ldClient && name && isPlayerLoginEnabled()){
+      try{
+        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+      }
       catch(_){ /* keep the anonymous context */ }
     }
   }
@@ -985,17 +1015,22 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+
+    // Player login is gated by the "show-player-login" flag. Evaluated once,
+    // after LD has initialized; falls back to "control" when LD is unavailable.
+    const loginEnabled = isPlayerLoginEnabled();
+    const saved = loginEnabled ? loadStoredName() : "";
+    if(loginEnabled && state === STATE.MENU){
+      // v1: swap the start screen for the login screen. loginOverlay is
+      // display:none in markup, so the control path never shows it.
+      if(saved) nameInput.value = saved;
+      playerHud.style.display = "";
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,10 +1056,15 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
     updateHud();
+    if(loginEnabled){
+      // v1: reflect any saved callsign in the HUD and retarget the LD context,
+      // unless the player already submitted a (newer) name meanwhile.
+      if(saved && !playerName) setPlayerName(saved);
+    } else {
+      // control: original start screen, exactly as before.
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
 
     requestAnimationFrame(loop);
   }
