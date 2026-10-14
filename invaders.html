@@ -432,6 +432,27 @@
     return playerLoginVariation() === "v1";
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release metrics for show-player-login
+     Custom events compared between the "control" and "v1"
+     audiences during the guarded release. Emitted on BOTH
+     paths (except login completion, which only exists in v1).
+     Telemetry is strictly best-effort: every track() call is
+     guarded so a tracking failure can never affect gameplay.
+  --------------------------------------------------------- */
+  let loginGameStartTracked = false;
+
+  // Uncaught client-side errors (both variations) -> error-rate guardrail.
+  // Observe only: never preventDefault, never rethrow.
+  window.addEventListener("error", ()=>{
+    if(!ldClient) return;
+    try{ ldClient.track("show-player-login-error"); }catch(_){ /* never break the page */ }
+  });
+  window.addEventListener("unhandledrejection", ()=>{
+    if(!ldClient) return;
+    try{ ldClient.track("show-player-login-error"); }catch(_){ /* never break the page */ }
+  });
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -581,6 +602,11 @@
       return;
     }
     loginError.textContent = "";
+    // Tracked BEFORE setPlayerName() re-identifies, so the event lands on the
+    // same context that evaluated show-player-login.
+    if(ldClient){
+      try{ ldClient.track("show-player-login-login-completed"); }catch(_){ /* best-effort */ }
+    }
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -776,6 +802,22 @@
   }
 
   function restartGame(){
+    // First game start of this page session (restartGame is the only path
+    // from MENU to PLAYING). Emitted on both variations so the release can
+    // compare start conversion and time-to-play between control and v1.
+    if(!loginGameStartTracked){
+      loginGameStartTracked = true;
+      if(ldClient){
+        try{
+          // Ensure the CURRENT context (which may be the callsign after a v1
+          // login re-identify) carries an evaluation of the flag, so these
+          // events are attributable. Return value intentionally unused.
+          playerLoginVariation();
+          ldClient.track("show-player-login-game-started");
+          ldClient.track("show-player-login-time-to-start", null, Math.round(performance.now()));
+        }catch(_){ /* best-effort */ }
+      }
+    }
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
