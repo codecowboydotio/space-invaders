@@ -3,7 +3,14 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag enable-player-login already existed (created by an earlier run tagged pr-34; same feature). Off in production and test, v1 unreleased, so it is reused as a fresh-flag whole-flag release of v1 (no targetVariation). Every anonymous visitor shares the LD context key 'anonymous-player', so a percentage rollout is all-or-nothing until per-visitor keys exist. In v1 only, ldClient.identify() switches the context key to the typed callsign, which re-evaluates invaders-shooter-sprite. The gate is evaluated once per session, before identify(), so it can't flip mid-session. Guardrail metrics should be global (e.g. game-started) because login metrics only produce data in the v1 arm."
+    "notes": "Flag enable-player-login already existed (created by an earlier run tagged pr-34; same feature). Off in production and test, v1 unreleased, so it is reused as a fresh-flag whole-flag release of v1 (no targetVariation). Every anonymous visitor shares the LD context key 'anonymous-player', so a percentage rollout is all-or-nothing until per-visitor keys exist. In v1 only, ldClient.identify() switches the context key to the typed callsign, which re-evaluates invaders-shooter-sprite. The gate is evaluated once per session, before identify(), so it can't flip mid-session. Guardrail metrics should be global (e.g. game-started) because login metrics only produce data in the v1 arm.",
+    "metricKeys": [
+      "enable-player-login-error-rate",
+      "enable-player-login-game-started",
+      "enable-player-login-latency",
+      "enable-player-login-login-completed"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
