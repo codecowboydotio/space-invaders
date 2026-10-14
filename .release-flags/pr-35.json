@@ -3,7 +3,13 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag enable-player-login already existed (created dark in an earlier run tagged pr-34; v1 unreleased, off in production+test). create_flag was an idempotent no-op; client-side availability enabled. PR #35 code lives under v1. Flag is evaluated once in init() after LD init and before identify(). Control = original start screen + anonymous context. Known v1 caveat: the R key / touch restart button can bypass the login (restartGame hides loginOverlay)."
+    "notes": "Flag enable-player-login already existed (created dark in an earlier run tagged pr-34; v1 unreleased, off in production+test). create_flag was an idempotent no-op; client-side availability enabled. PR #35 code lives under v1. Flag is evaluated once in init() after LD init and before identify(). Control = original start screen + anonymous context. Known v1 caveat: the R key / touch restart button can bypass the login (restartGame hides loginOverlay). METRICS (track()-backed; no observability/OTel stack in this page): enable-player-login-error-rate = killswitch (uncaught errors + unhandled rejections, both variations); enable-player-login-latency = monitoring (ms page-start to first-screen exit; v1 is expected to be slower because the player types a callsign, so it must not gate); enable-player-login-entry-rate = monitoring (first-screen exit rate, both variations). BLOCKER FOR A REAL GUARDED ROLLOUT: every visitor shares the LD context key 'anonymous-player', so a per-user percentage rollout cannot split traffic and the guarded rollout sees ONE context. Also, after identify() the v1 events move to the callsign context, which never evaluated this flag, so those events are not attributed (this affects returning v1 players and gameplay errors after login).",
+    "metricKeys": [
+      "enable-player-login-error-rate",
+      "enable-player-login-latency",
+      "enable-player-login-entry-rate"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
