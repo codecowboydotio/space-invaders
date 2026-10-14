@@ -336,6 +336,57 @@ describe(`${FLAG_KEY} fails safe to "control"`, () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* guarded-release start metrics — paired control / v1                 */
+/* ------------------------------------------------------------------ */
+describe(`${FLAG_KEY} start metrics (paired control / v1)`, () => {
+  async function reachStart(variation, opts = {}) {
+    const ld = makeFakeLD({ loginVariation: variation, ...opts });
+    const page = await loadPage({ ld, now: 500 });
+    if (variation === 'v1') {
+      page.el('nameInput').value = 'ACE';
+      page.el('loginForm').dispatch('submit');
+    }
+    return { ld, page };
+  }
+
+  for (const variation of ['control', 'v1']) {
+    it(`"${variation}": time-to-start is sent as a finite, non-negative integer metric value`, async () => {
+      const { ld, page } = await reachStart(variation);
+      page.clock.t = 1234.6;
+      page.el('startBtn').dispatch('click');
+      const tts = ld.tracks().filter((t) => t[0] === EV_TIME_TO_START);
+      assert.equal(tts.length, 1);
+      const [, data, value] = tts[0];
+      assert.equal(data, undefined);
+      assert.equal(typeof value, 'number');
+      assert.ok(Number.isFinite(value) && Number.isInteger(value) && value >= 0);
+      assert.equal(value, 735); // Math.round(1234.6 - 500)
+      // game-started carries no metric value
+      assert.deepEqual(ld.tracks().find((t) => t[0] === EV_GAME_STARTED), [EV_GAME_STARTED]);
+    });
+
+    it(`"${variation}": repeated START clicks / restarts never re-emit first-start metrics`, async () => {
+      const { ld, page } = await reachStart(variation);
+      page.el('startBtn').dispatch('click');
+      page.el('startBtn').dispatch('click');
+      page.window.dispatch('keydown', { code: 'KeyR' });
+      page.el('btnRestart').dispatch('click');
+      const keys = ld.trackedKeys();
+      assert.equal(keys.filter((k) => k === EV_GAME_STARTED).length, 1);
+      assert.equal(keys.filter((k) => k === EV_TIME_TO_START).length, 1);
+      assert.equal(keys.filter((k) => k === EV_LOGIN_COMPLETED).length, variation === 'v1' ? 1 : 0);
+    });
+
+    it(`"${variation}": track() throwing never breaks START`, async () => {
+      const { ld, page } = await reachStart(variation, { trackThrows: true });
+      assert.doesNotThrow(() => page.el('startBtn').dispatch('click'));
+      assert.equal(page.el('overlay').style.display, 'none', 'game is running');
+      assert.ok(ld.trackedKeys().includes(EV_GAME_STARTED));
+    });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* page-level error signal (both arms)                                 */
 /* ------------------------------------------------------------------ */
 describe(`${FLAG_KEY} error signal (both variations)`, () => {
