@@ -429,6 +429,28 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release metric events for "enable-player-login"
+     Emitted on BOTH the control and v1 paths so the release can compare
+     arms. Event keys are passed as literal strings at every call site.
+     Telemetry is best-effort: a tracking failure never affects gameplay.
+  --------------------------------------------------------- */
+  function trackPlayerLoginEvent(eventKey, metricValue){
+    if(!ldClient) return;
+    try{
+      if(typeof metricValue === "number" && isFinite(metricValue)){
+        ldClient.track(eventKey, undefined, metricValue);
+      } else {
+        ldClient.track(eventKey);
+      }
+    }catch(_){ /* telemetry must never break the game */ }
+  }
+
+  // Page-level error signal (both arms): uncaught errors and unhandled
+  // promise rejections. Observe-only — never calls preventDefault().
+  window.addEventListener("error", ()=>{ trackPlayerLoginEvent("enable-player-login-error"); });
+  window.addEventListener("unhandledrejection", ()=>{ trackPlayerLoginEvent("enable-player-login-error"); });
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -564,9 +586,15 @@
     if(ldClient && name){
       try{
         const p = ldClient.identify({ kind:"user", key: name, name: name });
-        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+        if(p && typeof p.catch === "function") p.catch(()=>{
+          /* keep the anonymous context */
+          trackPlayerLoginEvent("enable-player-login-error");
+        });
       }
-      catch(_){ /* keep the anonymous context */ }
+      catch(_){
+        /* keep the anonymous context */
+        trackPlayerLoginEvent("enable-player-login-error");
+      }
     }
   }
 
@@ -580,6 +608,9 @@
       return;
     }
     loginError.textContent = "";
+    // v1-only visibility signal; emitted BEFORE identify() so it is recorded
+    // on the context the flag was evaluated for.
+    trackPlayerLoginEvent("enable-player-login-login-completed");
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -650,6 +681,9 @@
 
   const STATE = { MENU:"menu", PLAYING:"playing", PAUSED:"paused", GAMEOVER:"gameover", WIN:"win" };
   let state = STATE.MENU;
+  // Guarded-release metric bookkeeping (telemetry only; no gameplay effect).
+  let menuShownAt = null;      // performance.now() when the first menu (START or login) became visible
+  let gameStartTracked = false;
 
   let score = 0, hiScore = 0, wave = 1, lives = 3;
 
@@ -775,10 +809,20 @@
   }
 
   function restartGame(){
+    // Guarded-release metrics: first game start of the session from the
+    // initial menu (control: START screen, v1: login → START screen).
+    const isFirstStart = !gameStartTracked && menuShownAt !== null && state === STATE.MENU;
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
+    if(isFirstStart){
+      gameStartTracked = true;
+      try{
+        trackPlayerLoginEvent("enable-player-login-game-started");
+        trackPlayerLoginEvent("enable-player-login-time-to-start", Math.round(performance.now() - menuShownAt));
+      }catch(_){ /* telemetry must never break the game */ }
+    }
   }
 
   startBtn.addEventListener("click", ()=>{
@@ -1062,6 +1106,8 @@
       updateHud();
       showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
     }
+    // Both arms: start the time-to-start clock once the first menu is visible.
+    menuShownAt = performance.now();
 
     requestAnimationFrame(loop);
   }
