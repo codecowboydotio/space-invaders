@@ -390,6 +390,58 @@
   // open and change events keep flowing.
   let ldClient = null;
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — per-browser "ld_device" context (AutoFactory)
+     Every visitor shares the user key "anonymous-player", so the
+     user kind cannot split traffic between flag variations. A
+     stable, anonymous per-browser "ld_device" context is added
+     ALONGSIDE the user context (multi-context). The user part is
+     left byte-identical, so existing user targeting (e.g.
+     invaders-shooter-sprite) evaluates exactly as before. The
+     device context is also carried through identify(), so events
+     sent after the callsign login stay attributed to the context
+     that evaluated enable-player-login. Guarded releases of
+     enable-player-login randomize by "ld_device" (already an
+     experiment-enabled randomization unit in the LD project).
+     Any failure degrades to the original single user context.
+  --------------------------------------------------------- */
+  const LD_DEVICE_KEY_STORAGE = "galactic-defender-ld-device";
+
+  function generateDeviceKey(){
+    try{
+      if(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"){
+        return crypto.randomUUID();
+      }
+    }catch(_){ /* fall through to the non-crypto key */ }
+    return "dev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+  }
+
+  function loadDeviceKey(){
+    let key = "";
+    try{ key = localStorage.getItem(LD_DEVICE_KEY_STORAGE) || ""; }catch(_){ key = ""; }
+    if(!key){
+      key = generateDeviceKey();
+      try{ localStorage.setItem(LD_DEVICE_KEY_STORAGE, key); }catch(_){ /* private mode: per-page key */ }
+    }
+    return key;
+  }
+
+  let ldDeviceKey = "";
+  try{ ldDeviceKey = loadDeviceKey(); }catch(_){ ldDeviceKey = ""; }
+
+  // Wraps a single "user" context into a user+ld_device multi-context.
+  // Returns the user context unchanged if no device key is available.
+  function withDeviceContext(userContext){
+    if(!ldDeviceKey) return userContext;
+    try{
+      const user = Object.assign({}, userContext);
+      delete user.kind;
+      return { kind: "multi", user: user, ld_device: { key: ldDeviceKey, anonymous: true } };
+    }catch(_){
+      return userContext;
+    }
+  }
+
   async function initLaunchDarkly(){
     if(typeof LDClient === "undefined"){
       console.warn("LaunchDarkly SDK not available; using default shooter sprite.");
@@ -397,7 +449,7 @@
     }
     ldClient = LDClient.initialize(
       LD_CLIENT_SIDE_ID,
-      { kind: "user", key: "anonymous-player", anonymous: true },
+      withDeviceContext({ kind: "user", key: "anonymous-player", anonymous: true }),
       { streaming: true } // explicit; also auto-enabled once we register .on('change')
     );
     try{
@@ -446,8 +498,8 @@
   // Fired once per page, the moment the player gets past the FIRST screen:
   //   control → START GAME from the menu
   //   v1      → successful callsign submit (or bypassing the login via restart)
-  // Must be called BEFORE any identify() so the events stay on the same
-  // (anonymous) context that evaluated the flag.
+  // Attribution rides on the per-browser "ld_device" context, which survives
+  // identify(); it is still called before identify() as belt-and-braces.
   function trackPlayerLoginEntry(){
     if(playerLoginEntryTracked || !ldClient) return;
     playerLoginEntryTracked = true;
@@ -608,7 +660,9 @@
     if(ldClient && name && name !== identifiedName){
       try{
         identifiedName = name;
-        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        // User part is unchanged (callsign as user key); the ld_device context is
+        // carried along so guarded-release events stay attributed (AutoFactory).
+        const p = ldClient.identify(withDeviceContext({ kind:"user", key: name, name: name }));
         // identify() returns a Promise — swallow async rejections too.
         if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
       }
