@@ -390,6 +390,51 @@
   // open and change events keep flowing.
   let ldClient = null;
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — per-browser randomization unit
+     Every browser shares the "anonymous-player" user key, so the
+     user context cannot split traffic for a percentage/guarded
+     rollout. We therefore send a multi-context that ADDS an
+     "ld_device" context with a stable per-browser key, and the
+     show-player-login rollout is randomized by ld_device.
+     The user context is left exactly as before, so targeting on
+     existing flags (e.g. invaders-shooter-sprite) is unchanged.
+     The same ld_device key is kept when v1 re-identifies to the
+     callsign, so a browser never changes bucket mid-session and
+     every event stays attributed to the unit that was bucketed.
+     Best-effort: storage/crypto failures fall back to an
+     in-memory key and never break the page.
+  --------------------------------------------------------- */
+  const LD_DEVICE_KEY_STORAGE = "galactic-defender-ld-device";
+
+  function loadOrCreateDeviceKey(){
+    let key = "";
+    try{ key = localStorage.getItem(LD_DEVICE_KEY_STORAGE) || ""; }catch(_){ key = ""; }
+    if(!key){
+      try{
+        if(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"){
+          key = crypto.randomUUID();
+        }
+      }catch(_){ key = ""; }
+      if(!key){
+        key = "dev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+      }
+      try{ localStorage.setItem(LD_DEVICE_KEY_STORAGE, key); }catch(_){ /* private mode */ }
+    }
+    return key;
+  }
+
+  const LD_DEVICE_KEY = loadOrCreateDeviceKey();
+
+  // Wraps a user context in a multi-context carrying the stable ld_device.
+  function ldContextFor(userContext){
+    return {
+      kind: "multi",
+      user: userContext,
+      ld_device: { key: LD_DEVICE_KEY, anonymous: true }
+    };
+  }
+
   async function initLaunchDarkly(){
     if(typeof LDClient === "undefined"){
       console.warn("LaunchDarkly SDK not available; using default shooter sprite.");
@@ -397,7 +442,7 @@
     }
     ldClient = LDClient.initialize(
       LD_CLIENT_SIDE_ID,
-      { kind: "user", key: "anonymous-player", anonymous: true },
+      ldContextFor({ kind: "user", key: "anonymous-player", anonymous: true }),
       { streaming: true } // explicit; also auto-enabled once we register .on('change')
     );
     try{
@@ -586,7 +631,9 @@
     // anonymous context untouched.
     if(ldClient && name && isPlayerLoginEnabled()){
       try{
-        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        // Keep the same ld_device so the show-player-login bucket (and the
+        // attribution of every guarded-release event) survives the switch.
+        const p = ldClient.identify(ldContextFor({ kind:"user", key: name, name: name }));
         if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
       }
       catch(_){ /* keep the anonymous context */ }
@@ -603,7 +650,8 @@
     }
     loginError.textContent = "";
     // Tracked BEFORE setPlayerName() re-identifies, so the event lands on the
-    // same context that evaluated show-player-login.
+    // exact context that evaluated show-player-login (the ld_device unit is
+    // identical before and after the re-identify either way).
     if(ldClient){
       try{ ldClient.track("show-player-login-login-completed"); }catch(_){ /* best-effort */ }
     }
@@ -809,9 +857,10 @@
       loginGameStartTracked = true;
       if(ldClient){
         try{
-          // Ensure the CURRENT context (which may be the callsign after a v1
-          // login re-identify) carries an evaluation of the flag, so these
-          // events are attributable. Return value intentionally unused.
+          // Re-evaluate on the CURRENT multi-context (the callsign user after a
+          // v1 login, same ld_device) so the evaluation and these events share
+          // one context. The ld_device bucket is unchanged by the re-identify,
+          // so v1 stays v1. Return value intentionally unused.
           playerLoginVariation();
           ldClient.track("show-player-login-game-started");
           ldClient.track("show-player-login-time-to-start", null, Math.round(performance.now()));
