@@ -427,6 +427,41 @@
     }
   }
 
+  /* GUARDED-RELEASE METRICS for "enable-player-login".
+     Emitted on BOTH the control and v1 paths so the release can compare them
+     (except login-completed, which only exists on v1). Event keys are LITERAL
+     strings that must match the LaunchDarkly metric definitions exactly.
+     Best-effort only: a missing SDK or a throwing track() never affects play. */
+  function safeTrack(emit){
+    if(!ldClient) return;
+    try{ emit(ldClient); }catch(_){ /* telemetry must never break the game */ }
+  }
+
+  // Error signal: first uncaught script error / unhandled rejection per page
+  // load (once is enough for an occurrence metric, and it avoids flooding
+  // events if something throws every animation frame).
+  let loginMetricErrorTracked = false;
+  function trackPlayerLoginError(){
+    if(loginMetricErrorTracked || !ldClient) return;
+    loginMetricErrorTracked = true;
+    safeTrack(c => c.track("enable-player-login-error"));
+  }
+  window.addEventListener("error", trackPlayerLoginError);
+  window.addEventListener("unhandledrejection", trackPlayerLoginError);
+
+  // Business + latency signal: the first game started this page load, and
+  // how long (ms since navigation) it took the player to get there.
+  let firstGameStartTracked = false;
+  function trackFirstGameStart(){
+    if(firstGameStartTracked) return;
+    firstGameStartTracked = true;
+    safeTrack(c => {
+      const elapsedMs = Math.round(performance.now());
+      c.track("enable-player-login-game-started");
+      c.track("enable-player-login-time-to-start", undefined, elapsedMs);
+    });
+  }
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -578,6 +613,9 @@
       return;
     }
     loginError.textContent = "";
+    // Tracked BEFORE setPlayerName() re-keys the LD context via identify(), so
+    // the event stays on the context that evaluated "enable-player-login".
+    safeTrack(c => c.track("enable-player-login-login-completed"));
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -773,6 +811,7 @@
   }
 
   function restartGame(){
+    if(state === STATE.MENU) trackFirstGameStart(); // telemetry only; no-op after the first start
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
