@@ -8,7 +8,7 @@
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { FLAG_KEY, loadPage, makeFakeLD, flush } = require('./helpers/ld-page-harness');
+const { FLAG_KEY, GENERATED_ANON_KEY, loadPage, makeFakeLD, flush } = require('./helpers/ld-page-harness');
 
 const PLAYER_NAME_KEY = 'galactic-defender-player';
 const EV_ERROR = 'enable-player-login-error';
@@ -28,7 +28,27 @@ function assertControlUi(page) {
 /* ------------------------------------------------------------------ */
 /* control variation                                                   */
 /* ------------------------------------------------------------------ */
+describe('LaunchDarkly context (per-visitor bucketing)', () => {
+  it('initializes with an anonymous user context and NO hard-coded key', async () => {
+    const ld = makeFakeLD({ loginVariation: 'control' });
+    await loadPage({ ld });
+    const init = ld.calls.find((c) => c[0] === 'initialize');
+    assert.deepEqual(init[2], { kind: 'user', anonymous: true });
+    assert.ok(!('key' in init[2]), 'SDK must generate/cache a per-visitor key');
+  });
+
+  it('the HTML markup no longer contains the shared "anonymous-player" key', () => {
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'invaders.html'), 'utf8');
+    assert.ok(!html.includes('"anonymous-player"'));
+  });
+});
+
 describe(`${FLAG_KEY} = "control" (flag off)`, () => {
+  it('START overlay is visible in the markup before init() runs (original behaviour)', () => {
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'invaders.html'), 'utf8');
+    assert.match(html, /<div class="overlay-msg" id="overlay">/);
+  });
+
   it('evaluates the flag once with "control" as the code default', async () => {
     const ld = makeFakeLD({ loginVariation: 'control' });
     const page = await loadPage({ ld });
@@ -111,7 +131,7 @@ describe(`${FLAG_KEY} = "v1" (flag on)`, () => {
     assert.equal(page.store.has(PLAYER_NAME_KEY), false);
   });
 
-  it('valid callsign: sanitised, shown in HUD, persisted, identified, then START overlay', async () => {
+  it('valid callsign: sanitised, shown in HUD, persisted, set as context name (key unchanged), then START overlay', async () => {
     const ld = makeFakeLD({ loginVariation: 'v1' });
     const page = await loadPage({ ld });
     page.el('nameInput').value = '  ma<v>rk! ';
@@ -119,23 +139,50 @@ describe(`${FLAG_KEY} = "v1" (flag on)`, () => {
     assert.equal(page.el('loginError').textContent, '');
     assert.equal(page.el('playerVal').textContent, 'MAVRK');
     assert.equal(page.store.get(PLAYER_NAME_KEY), 'MAVRK');
-    assert.deepEqual(ld.identifies(), [{ kind: 'user', key: 'MAVRK', name: 'MAVRK' }]);
+    assert.deepEqual(ld.identifies(), [
+      { kind: 'user', key: GENERATED_ANON_KEY, anonymous: true, name: 'MAVRK' },
+    ]);
     assert.equal(page.el('loginOverlay').style.display, 'none');
     assert.equal(page.el('overlay').style.display, 'flex');
     assert.equal(page.el('overlayTitle').textContent, 'GALACTIC DEFENDER');
     assert.match(page.el('overlayText').innerHTML, /^Welcome, MAVRK\./);
   });
 
-  it('tracks login-completed BEFORE identify() switches the context', async () => {
+  it('never switches the bucketing key: every identify() keeps the anonymous key the flag was evaluated for', async () => {
     const ld = makeFakeLD({ loginVariation: 'v1' });
+    const page = await loadPage({ ld, storage: { [PLAYER_NAME_KEY]: 'AAA' } });
+    page.el('nameInput').value = 'AAA';
+    page.el('loginForm').dispatch('submit');
+    await flush();
+    page.el('startBtn').dispatch('click');
+    const ids = ld.identifies();
+    assert.equal(ids.length, 2, 'init (saved callsign) + login submit');
+    for (const ctx of ids) {
+      assert.equal(ctx.key, GENERATED_ANON_KEY);
+      assert.notEqual(ctx.key, 'AAA');
+      assert.equal(ctx.kind, 'user');
+    }
+    assert.deepEqual(ld.trackedKeys(), [EV_LOGIN_COMPLETED, EV_GAME_STARTED, EV_TIME_TO_START]);
+  });
+
+  it('skips identify() when the current context key cannot be read (never invents a key)', async () => {
+    const ld = makeFakeLD({ loginVariation: 'v1', noGetContext: true });
     const page = await loadPage({ ld });
     page.el('nameInput').value = 'ACE';
     page.el('loginForm').dispatch('submit');
-    const trackIdx = ld.indexOf((c) => c[0] === 'track' && c[1] === EV_LOGIN_COMPLETED);
-    const identifyIdx = ld.indexOf((c) => c[0] === 'identify');
-    assert.ok(trackIdx >= 0, 'login-completed tracked');
-    assert.ok(identifyIdx > trackIdx, 'identify happens after login-completed');
-    assert.deepEqual(ld.tracks().find((t) => t[0] === EV_LOGIN_COMPLETED), [EV_LOGIN_COMPLETED]);
+    assert.deepEqual(ld.identifies(), []);
+    assert.equal(page.el('playerVal').textContent, 'ACE');
+    assert.equal(page.el('overlay').style.display, 'flex');
+  });
+
+  it('tracks login-completed exactly once on a successful submit and releases input focus', async () => {
+    const ld = makeFakeLD({ loginVariation: 'v1' });
+    const page = await loadPage({ ld });
+    assert.equal(page.doc.activeElement, page.el('nameInput'));
+    page.el('nameInput').value = 'ACE';
+    page.el('loginForm').dispatch('submit');
+    assert.deepEqual(ld.tracks(), [[EV_LOGIN_COMPLETED]]);
+    assert.notEqual(page.doc.activeElement, page.el('nameInput'), 'callsign input blurred');
   });
 
   it('login → START emits login-completed, game-started, time-to-start once each', async () => {
@@ -157,7 +204,7 @@ describe(`${FLAG_KEY} = "v1" (flag on)`, () => {
     assert.equal(ld.trackedKeys().filter((k) => k === EV_GAME_STARTED).length, 1);
   });
 
-  it('gate is evaluated exactly once, before any identify(), and cannot flip after identify', async () => {
+  it('gate is evaluated exactly once, before any identify(), and is held for the session', async () => {
     const ld = makeFakeLD({ loginVariation: 'v1' });
     const page = await loadPage({ ld, storage: { [PLAYER_NAME_KEY]: 'goose' } });
     page.el('nameInput').value = 'ICEMAN';
@@ -169,18 +216,20 @@ describe(`${FLAG_KEY} = "v1" (flag on)`, () => {
     assert.ok(evalIdx >= 0 && firstIdentify > evalIdx);
   });
 
-  it('saved callsign: prefilled, shown in HUD, identified at init — login screen still shown', async () => {
+  it('saved callsign: prefilled, shown in HUD, set as context name at init (key unchanged) — login screen still shown', async () => {
     const ld = makeFakeLD({ loginVariation: 'v1' });
     const page = await loadPage({ ld, storage: { [PLAYER_NAME_KEY]: 'goose<>' } });
     assert.equal(page.el('nameInput').value, 'GOOSE');
     assert.equal(page.el('playerVal').textContent, 'GOOSE');
-    assert.deepEqual(ld.identifies(), [{ kind: 'user', key: 'GOOSE', name: 'GOOSE' }]);
+    assert.deepEqual(ld.identifies(), [
+      { kind: 'user', key: GENERATED_ANON_KEY, anonymous: true, name: 'GOOSE' },
+    ]);
     assert.equal(page.el('loginOverlay').style.display, 'flex');
     assert.equal(page.el('overlay').style.display, 'none');
     assert.ok(!ld.trackedKeys().includes(EV_LOGIN_COMPLETED), 'login-completed only on submit');
   });
 
-  it('typing in the callsign field does not trigger game hotkeys; R outside it never leaves login stuck', async () => {
+  it('typing in the callsign field does not trigger game hotkeys', async () => {
     const ld = makeFakeLD({ loginVariation: 'v1' });
     const page = await loadPage({ ld });
     const input = page.el('nameInput');
@@ -188,11 +237,23 @@ describe(`${FLAG_KEY} = "v1" (flag on)`, () => {
     page.window.dispatch('keydown', { code: 'KeyP', target: input });
     assert.equal(page.el('loginOverlay').style.display, 'flex', 'still on login screen');
     assert.deepEqual(ld.tracks(), []);
+  });
 
+  it('login cannot be skipped: R hotkey / touch restart are ignored while the login screen shows', async () => {
+    const ld = makeFakeLD({ loginVariation: 'v1' });
+    const page = await loadPage({ ld });
     page.window.dispatch('keydown', { code: 'KeyR' });
-    assert.equal(page.el('loginOverlay').style.display, 'none', 'login overlay cleared on start');
+    page.el('btnRestart').dispatch('click');
+    assert.equal(page.el('loginOverlay').style.display, 'flex', 'still on login screen');
     assert.equal(page.el('overlay').style.display, 'none');
-    assert.deepEqual(ld.trackedKeys(), [EV_GAME_STARTED, EV_TIME_TO_START]);
+    assert.deepEqual(ld.tracks(), [], 'no game-started without a callsign');
+
+    // After login, START works and R restarts normally.
+    page.el('nameInput').value = 'ACE';
+    page.el('loginForm').dispatch('submit');
+    page.window.dispatch('keydown', { code: 'KeyR' });
+    assert.equal(page.el('overlay').style.display, 'none', 'game is running');
+    assert.deepEqual(ld.trackedKeys(), [EV_LOGIN_COMPLETED, EV_GAME_STARTED, EV_TIME_TO_START]);
   });
 
   for (const mode of ['reject', 'throw']) {

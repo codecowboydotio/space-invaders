@@ -80,6 +80,7 @@ function makeElement(doc, spec) {
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
     removeEventListener() {},
     focus() { doc.activeElement = el; },
+    blur() { if (doc.activeElement === el) doc.activeElement = null; },
     getContext() { return makeCanvasContext(); },
     dispatch(type, init = {}) { return fire(listeners, type, el, init); },
   };
@@ -96,10 +97,17 @@ function makeElement(doc, spec) {
  * @param {boolean} [opts.trackThrows]
  * @param {'resolve'|'reject'|'throw'} [opts.identify]
  */
+const GENERATED_ANON_KEY = 'generated-anon-key-1234';
+
 function makeFakeLD(opts = {}) {
-  const { loginVariation, variationThrows = false, initFails = false, trackThrows = false, identify = 'resolve' } = opts;
+  const {
+    loginVariation, variationThrows = false, initFails = false, trackThrows = false,
+    identify = 'resolve', noGetContext = false,
+  } = opts;
   const calls = [];
+  let currentContext = null;
   const client = {
+    getContext: noGetContext ? undefined : () => (currentContext ? { ...currentContext } : currentContext),
     async waitForInitialization() {
       calls.push(['waitForInitialization']);
       if (initFails) throw new Error('LD init timeout');
@@ -120,6 +128,7 @@ function makeFakeLD(opts = {}) {
       calls.push(['identify', JSON.parse(JSON.stringify(ctx))]);
       if (identify === 'reject') return Promise.reject(new Error('identify failed'));
       if (identify === 'throw') throw new Error('identify threw');
+      currentContext = { ...ctx };
       return Promise.resolve();
     },
     on() {},
@@ -127,6 +136,10 @@ function makeFakeLD(opts = {}) {
   const sdk = {
     initialize(id, ctx) {
       calls.push(['initialize', id, JSON.parse(JSON.stringify(ctx))]);
+      // Like JS SDK v3: an anonymous context without a key gets a generated,
+      // cached per-visitor key.
+      currentContext = { ...ctx };
+      if (ctx && ctx.anonymous && !ctx.key) currentContext.key = GENERATED_ANON_KEY;
       return client;
     },
   };
@@ -208,4 +221,4 @@ async function loadPage({ ld = null, storage = {}, storageThrows = false, now = 
   };
 }
 
-module.exports = { FLAG_KEY, loadPage, makeFakeLD, flush };
+module.exports = { FLAG_KEY, GENERATED_ANON_KEY, loadPage, makeFakeLD, flush };

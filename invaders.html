@@ -332,7 +332,7 @@
           <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
         </form>
       </div>
-      <div class="overlay-msg" id="overlay" style="display:none">
+      <div class="overlay-msg" id="overlay">
         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
         <button class="btn amber" id="startBtn">▶ START GAME</button>
@@ -395,9 +395,13 @@
       console.warn("LaunchDarkly SDK not available; using default shooter sprite.");
       return;
     }
+    // No hard-coded key: with anonymous:true and the key omitted, the JS SDK v3
+    // generates a unique key per visitor and caches it in localStorage, so each
+    // visitor is bucketed independently (required for percentage / guarded
+    // rollouts) and keeps the same key across visits.
     ldClient = LDClient.initialize(
       LD_CLIENT_SIDE_ID,
-      { kind: "user", key: "anonymous-player", anonymous: true },
+      { kind: "user", anonymous: true },
       { streaming: true } // explicit; also auto-enabled once we register .on('change')
     );
     try{
@@ -548,14 +552,18 @@
      PLAYER LOGIN
      Captures the pilot's callsign before the game starts.
      The name is sanitised, persisted to localStorage, shown in
-     the HUD, and used as the LaunchDarkly context key so flag
-     targeting can be per-player.
+     the HUD, and attached to the LaunchDarkly context as the
+     `name` attribute. The context KEY is never changed: it stays
+     the SDK-generated per-visitor anonymous key the flag was
+     bucketed on, so every metric event is attributed to the
+     context that evaluated "enable-player-login". (Callsigns are
+     not unique — e.g. "AAA" — so they must never become the key.)
   --------------------------------------------------------- */
   const PLAYER_NAME_KEY = "galactic-defender-player";
   const MAX_NAME_LEN = 12;
   let playerName = "";
-  // Evaluated ONCE in init() (before any identify() call) and held for the
-  // whole session so re-identifying with the callsign can't flip the gate.
+  // Evaluated ONCE in init() and held for the whole session so the gate can
+  // never flip mid-session.
   let loginEnabled = false;
   const playerHud = document.getElementById("playerHud");
 
@@ -581,11 +589,15 @@
   function setPlayerName(name){
     playerName = name;
     playerEl.textContent = name || "---";
-    // Best-effort: retarget the LD context to this player so flags can be
-    // evaluated per-callsign. Failure here must never block play.
-    if(ldClient && name){
+    // Best-effort: attach the callsign as the `name` attribute of the CURRENT
+    // LD context, keeping its key (the per-visitor anonymous key) unchanged.
+    // If the current context/key can't be read, skip identify() entirely
+    // rather than risk switching keys. Failure here must never block play.
+    if(ldClient && name && typeof ldClient.getContext === "function"){
       try{
-        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        const current = ldClient.getContext();
+        if(!current || typeof current.key !== "string" || !current.key) return;
+        const p = ldClient.identify(Object.assign({}, current, { name: name }));
         if(p && typeof p.catch === "function") p.catch(()=>{
           /* keep the anonymous context */
           trackPlayerLoginEvent("enable-player-login-error");
@@ -608,12 +620,15 @@
       return;
     }
     loginError.textContent = "";
-    // v1-only visibility signal; emitted BEFORE identify() so it is recorded
-    // on the context the flag was evaluated for.
+    // v1-only visibility signal. The context key never changes (see
+    // setPlayerName), so this and every later metric event is recorded on the
+    // same context the flag was evaluated for.
     trackPlayerLoginEvent("enable-player-login-login-completed");
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
+    // Release focus from the (now hidden) input so game hotkeys work at once.
+    try{ if(typeof nameInput.blur === "function") nameInput.blur(); }catch(_){}
     showOverlay(
       "GALACTIC DEFENDER",
       "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
@@ -811,8 +826,10 @@
   function restartGame(){
     // Guarded-release metrics: first game start of the session from the
     // initial menu (control: START screen, v1: login → START screen).
+    // v1: the login screen is a required step — ignore restart (R hotkey /
+    // touch ↻) while it is showing so play can't start without a callsign.
+    if(loginEnabled && loginOverlay.style.display !== "none") return;
     const isFirstStart = !gameStartTracked && menuShownAt !== null && state === STATE.MENU;
-    loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
@@ -1060,8 +1077,8 @@
   async function init(){
     await initLaunchDarkly();
 
-    // Evaluate the login gate once, right after SDK init and BEFORE any
-    // identify() call. Fails safe to "control" (ldClient null / unexpected value).
+    // Evaluate the login gate once, right after SDK init. Fails safe to
+    // "control" (ldClient null / unexpected value).
     loginEnabled = playerLoginVariation() === "v1";
 
     const shipPath = currentShooterSpritePath();
@@ -1095,7 +1112,8 @@
       const saved = loadStoredName();
       if(saved) nameInput.value = saved;
       playerHud.style.display = "";
-      // Reflect any saved callsign in the HUD and retarget the LD context.
+      // Reflect any saved callsign in the HUD and attach it as the LD context
+      // name attribute (context key unchanged).
       if(saved) setPlayerName(saved);
       updateHud();
       overlay.style.display = "none";
