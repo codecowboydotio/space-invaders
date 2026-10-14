@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag enable-player-login already existed (created dark in an earlier run tagged pr-34; v1 unreleased, off in production+test). create_flag was an idempotent no-op; client-side availability enabled. PR #35 code lives under v1. Flag is evaluated once in init() after LD init and before identify(). Control = original start screen + anonymous context. Known v1 caveat: the R key / touch restart button can bypass the login (restartGame hides loginOverlay)."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
