@@ -2,7 +2,9 @@
   "schemaVersion": "1.2",
   "flagKey": "enable-player-login",
   "scope": "frontend",
-  "releasePlan": {},
+  "releasePlan": {
+    "notes": "Flag pre-existed (created by an earlier run, tagged pr-34); v1 verified unreleased in production and test, so it was reused. The flag is evaluated once, before login, against the shared LD context key 'anonymous-player' (JS SDK v3 keeps an explicit key even when anonymous:true is set). A percentage rollout therefore puts every visitor in the same bucket, so it's effectively all-or-nothing. After login, identify() re-keys the context to the callsign, but the UI is latched at init so it never flips mid-session."
+  },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
     "action": "auto",
