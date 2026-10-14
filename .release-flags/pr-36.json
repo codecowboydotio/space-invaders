@@ -3,7 +3,14 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Flag pre-existed (created by an earlier run, tagged pr-34); v1 verified unreleased in production and test, so it was reused. The flag is evaluated once, before login, against the shared LD context key 'anonymous-player' (JS SDK v3 keeps an explicit key even when anonymous:true is set). A percentage rollout therefore puts every visitor in the same bucket, so it's effectively all-or-nothing. After login, identify() re-keys the context to the callsign, but the UI is latched at init so it never flips mid-session."
+    "notes": "Flag pre-existed (created by an earlier run, tagged pr-34); v1 verified unreleased in production and test, so it was reused. The flag is evaluated once, before login, against the shared LD context key 'anonymous-player' (JS SDK v3 keeps an explicit key even when anonymous:true is set). A percentage rollout therefore puts every visitor in the same bucket, so it's effectively all-or-nothing. After login, identify() re-keys the context to the callsign, but the UI is latched at init so it never flips mid-session. METRICS (Metrics Author): the LaunchDarkly docs confirm JS SDK v3 only generates a per-device key when 'key' is omitted, so every visitor is ONE 'user' context and the guarded release cannot compare treatment against control until init uses { kind:'user', anonymous:true } with no key. Separately, events tracked after identify() (game-started and time-to-start on v1, and any post-login errors) land on the callsign context, which never evaluated this flag, so v1 is under-attributed on those metrics. Roles: error-rate=killswitch; game-start-rate, latency, and login-completion-rate=monitoring. No global autogen metrics attached, because invaders.html has no observability plugin and the ld_autogen__telemetry/otel metrics get no data from this page.",
+    "metricKeys": [
+      "enable-player-login-error-rate",
+      "enable-player-login-game-start-rate",
+      "enable-player-login-latency",
+      "enable-player-login-login-completion-rate"
+    ],
+    "randomizationUnit": "user"
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
