@@ -1,0 +1,12 @@
+{
+  "name": "space-invaders",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Galactic Defender arcade game (single-page invaders.html)",
+  "scripts": {
+    "test": "node --test test/player-login-flag.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}
