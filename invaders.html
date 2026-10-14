@@ -180,6 +180,39 @@
   .btn.amber{ border-color:var(--amber); color:var(--amber); box-shadow:0 0 12px rgba(255,179,0,0.25);}
   .btn.amber:hover{ background:rgba(255,179,0,0.1); }
 
+  /* ---------- LOGIN ---------- */
+  #loginForm{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    width:100%;
+  }
+  .name-input{
+    font-family:'Press Start 2P', monospace;
+    background:rgba(2,4,3,0.9);
+    border:2px solid var(--phosphor);
+    color:var(--phosphor);
+    text-align:center;
+    text-transform:uppercase;
+    letter-spacing:4px;
+    font-size:16px;
+    padding:12px 10px;
+    width:min(240px, 80%);
+    caret-color:var(--amber);
+    box-shadow:0 0 12px rgba(61,255,110,0.2), inset 0 0 8px rgba(0,0,0,0.6);
+    outline:none;
+  }
+  .name-input::placeholder{ color:var(--phosphor-dim); letter-spacing:4px; }
+  .name-input:focus{ box-shadow:0 0 16px rgba(61,255,110,0.45), inset 0 0 8px rgba(0,0,0,0.6); }
+  .login-error{
+    font-size:8px;
+    color:var(--danger);
+    letter-spacing:1px;
+    min-height:10px;
+    text-shadow:0 0 6px rgba(255,59,82,0.6);
+  }
+
   .controls-hint{
     margin-top:12px;
     font-size:8px;
@@ -276,6 +309,7 @@
 
   <div class="cabinet">
     <div class="hud">
+      <div id="playerHud" style="display:none"><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
@@ -287,6 +321,17 @@
       <div class="scanlines"></div>
       <div class="vignette"></div>
       <div class="flicker"></div>
+      <div class="overlay-msg" id="loginOverlay" style="display:none">
+        <h2>ENTER CALLSIGN</h2>
+        <p>Identify yourself, pilot. Your callsign is logged on the leaderboard.</p>
+        <form id="loginForm" autocomplete="off">
+          <input class="name-input" id="nameInput" type="text" maxlength="12"
+                 placeholder="AAA" aria-label="Player callsign"
+                 autocapitalize="characters" spellcheck="false" />
+          <div class="login-error" id="loginError"></div>
+          <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
+        </form>
+      </div>
       <div class="overlay-msg" id="overlay">
         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
@@ -345,6 +390,51 @@
   // open and change events keep flowing.
   let ldClient = null;
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — per-browser randomization unit
+     Every browser shares the "anonymous-player" user key, so the
+     user context cannot split traffic for a percentage/guarded
+     rollout. We therefore send a multi-context that ADDS an
+     "ld_device" context with a stable per-browser key, and the
+     show-player-login rollout is randomized by ld_device.
+     The user context is left exactly as before, so targeting on
+     existing flags (e.g. invaders-shooter-sprite) is unchanged.
+     The same ld_device key is kept when v1 re-identifies to the
+     callsign, so a browser never changes bucket mid-session and
+     every event stays attributed to the unit that was bucketed.
+     Best-effort: storage/crypto failures fall back to an
+     in-memory key and never break the page.
+  --------------------------------------------------------- */
+  const LD_DEVICE_KEY_STORAGE = "galactic-defender-ld-device";
+
+  function loadOrCreateDeviceKey(){
+    let key = "";
+    try{ key = localStorage.getItem(LD_DEVICE_KEY_STORAGE) || ""; }catch(_){ key = ""; }
+    if(!key){
+      try{
+        if(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"){
+          key = crypto.randomUUID();
+        }
+      }catch(_){ key = ""; }
+      if(!key){
+        key = "dev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+      }
+      try{ localStorage.setItem(LD_DEVICE_KEY_STORAGE, key); }catch(_){ /* private mode */ }
+    }
+    return key;
+  }
+
+  const LD_DEVICE_KEY = loadOrCreateDeviceKey();
+
+  // Wraps a user context in a multi-context carrying the stable ld_device.
+  function ldContextFor(userContext){
+    return {
+      kind: "multi",
+      user: userContext,
+      ld_device: { key: LD_DEVICE_KEY, anonymous: true }
+    };
+  }
+
   async function initLaunchDarkly(){
     if(typeof LDClient === "undefined"){
       console.warn("LaunchDarkly SDK not available; using default shooter sprite.");
@@ -352,7 +442,7 @@
     }
     ldClient = LDClient.initialize(
       LD_CLIENT_SIDE_ID,
-      { kind: "user", key: "anonymous-player", anonymous: true },
+      ldContextFor({ kind: "user", key: "anonymous-player", anonymous: true }),
       { streaming: true } // explicit; also auto-enabled once we register .on('change')
     );
     try{
@@ -362,6 +452,51 @@
       ldClient = null;
     }
   }
+
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — player login flag
+     Multivariate string flag ("control" | "v1" | ...). "v1"
+     shows the ENTER CALLSIGN login screen, the PLAYER HUD cell
+     and retargets the LD context to the callsign. Anything else
+     (including "control", an absent flag, or no LD client)
+     keeps the original start-screen behavior.
+  --------------------------------------------------------- */
+  const LD_FLAG_PLAYER_LOGIN = "show-player-login";
+
+  function playerLoginVariation(){
+    if(!ldClient) return "control";
+    try{
+      const value = ldClient.variation(LD_FLAG_PLAYER_LOGIN, "control");
+      return (typeof value === "string" && value) ? value : "control";
+    }catch(_){
+      return "control";
+    }
+  }
+
+  function isPlayerLoginEnabled(){
+    return playerLoginVariation() === "v1";
+  }
+
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release metrics for show-player-login
+     Custom events compared between the "control" and "v1"
+     audiences during the guarded release. Emitted on BOTH
+     paths (except login completion, which only exists in v1).
+     Telemetry is strictly best-effort: every track() call is
+     guarded so a tracking failure can never affect gameplay.
+  --------------------------------------------------------- */
+  let loginGameStartTracked = false;
+
+  // Uncaught client-side errors (both variations) -> error-rate guardrail.
+  // Observe only: never preventDefault, never rethrow.
+  window.addEventListener("error", ()=>{
+    if(!ldClient) return;
+    try{ ldClient.track("show-player-login-error"); }catch(_){ /* never break the page */ }
+  });
+  window.addEventListener("unhandledrejection", ()=>{
+    if(!ldClient) return;
+    try{ ldClient.track("show-player-login-error"); }catch(_){ /* never break the page */ }
+  });
 
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
@@ -441,6 +576,8 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
+  const playerHud = document.getElementById("playerHud");
+  const playerEl = document.getElementById("playerVal");
   const scoreEl = document.getElementById("scoreVal");
   const waveEl = document.getElementById("waveVal");
   const hiEl = document.getElementById("hiVal");
@@ -450,14 +587,104 @@
   const overlayText = document.getElementById("overlayText");
   const startBtn = document.getElementById("startBtn");
 
+  const loginOverlay = document.getElementById("loginOverlay");
+  const loginForm = document.getElementById("loginForm");
+  const nameInput = document.getElementById("nameInput");
+  const loginError = document.getElementById("loginError");
+
+  /* ---------------------------------------------------------
+     PLAYER LOGIN
+     Captures the pilot's callsign before the game starts.
+     The name is sanitised, persisted to localStorage, shown in
+     the HUD, and used as the LaunchDarkly context key so flag
+     targeting can be per-player.
+  --------------------------------------------------------- */
+  const PLAYER_NAME_KEY = "galactic-defender-player";
+  const MAX_NAME_LEN = 12;
+  let playerName = "";
+
+  // Strip anything that isn't a letter, number, space, dash or underscore so
+  // the arcade font renders cleanly and nothing HTML-unsafe reaches the DOM.
+  function sanitizeName(raw){
+    return (raw || "")
+      .replace(/[^A-Za-z0-9 _-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, MAX_NAME_LEN)
+      .toUpperCase();
+  }
+
+  function loadStoredName(){
+    try{ return sanitizeName(localStorage.getItem(PLAYER_NAME_KEY) || ""); }
+    catch(_){ return ""; }
+  }
+  function storeName(name){
+    try{ localStorage.setItem(PLAYER_NAME_KEY, name); }catch(_){ /* private mode */ }
+  }
+
+  function setPlayerName(name){
+    playerName = name;
+    playerEl.textContent = name || "---";
+    // Best-effort: retarget the LD context to this player so flags can be
+    // evaluated per-callsign. Failure here must never block play.
+    // Only under the "v1" variation of show-player-login; control keeps the
+    // anonymous context untouched.
+    if(ldClient && name && isPlayerLoginEnabled()){
+      try{
+        // Keep the same ld_device so the show-player-login bucket (and the
+        // attribution of every guarded-release event) survives the switch.
+        const p = ldClient.identify(ldContextFor({ kind:"user", key: name, name: name }));
+        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+      }
+      catch(_){ /* keep the anonymous context */ }
+    }
+  }
+
+  function handleLogin(e){
+    if(e) e.preventDefault();
+    const name = sanitizeName(nameInput.value);
+    if(name.length < 1){
+      loginError.textContent = "CALLSIGN REQUIRED";
+      nameInput.focus();
+      return;
+    }
+    loginError.textContent = "";
+    // Tracked BEFORE setPlayerName() re-identifies, so the event lands on the
+    // exact context that evaluated show-player-login (the ld_device unit is
+    // identical before and after the re-identify either way).
+    if(ldClient){
+      try{ ldClient.track("show-player-login-login-completed"); }catch(_){ /* best-effort */ }
+    }
+    setPlayerName(name);
+    storeName(name);
+    loginOverlay.style.display = "none";
+    showOverlay(
+      "GALACTIC DEFENDER",
+      "Welcome, " + name + ".<br>Arrow keys or A/D to move, SPACE to fire, P to pause.",
+      "▶ START GAME"
+    );
+  }
+
+  loginForm.addEventListener("submit", handleLogin);
+
   let keys = {};
+  // True while the player is typing in a text field (e.g. the login screen),
+  // so game hotkeys don't hijack the keystrokes.
+  function isTypingTarget(e){
+    const t = e.target;
+    return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  }
   window.addEventListener("keydown", (e)=>{
+    if(isTypingTarget(e)) return;
     keys[e.code] = true;
     if(e.code === "Space") e.preventDefault();
     if(e.code === "KeyP") togglePause();
     if(e.code === "KeyR") restartGame();
   });
-  window.addEventListener("keyup", (e)=>{ keys[e.code] = false; });
+  window.addEventListener("keyup", (e)=>{
+    if(isTypingTarget(e)) return;
+    keys[e.code] = false;
+  });
 
   /* ---------------------------------------------------------
      TOUCH CONTROLS
@@ -623,6 +850,24 @@
   }
 
   function restartGame(){
+    // First game start of this page session (restartGame is the only path
+    // from MENU to PLAYING). Emitted on both variations so the release can
+    // compare start conversion and time-to-play between control and v1.
+    if(!loginGameStartTracked){
+      loginGameStartTracked = true;
+      if(ldClient){
+        try{
+          // Re-evaluate on the CURRENT multi-context (the callsign user after a
+          // v1 login, same ld_device) so the evaluation and these events share
+          // one context. The ld_device bucket is unchanged by the re-identify,
+          // so v1 stays v1. Return value intentionally unused.
+          playerLoginVariation();
+          ldClient.track("show-player-login-game-started");
+          ldClient.track("show-player-login-time-to-start", null, Math.round(performance.now()));
+        }catch(_){ /* best-effort */ }
+      }
+    }
+    loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
@@ -862,6 +1107,21 @@
   --------------------------------------------------------- */
   async function init(){
     await initLaunchDarkly();
+
+    // Player login is gated by the "show-player-login" flag. Evaluated once,
+    // after LD has initialized; falls back to "control" when LD is unavailable.
+    const loginEnabled = isPlayerLoginEnabled();
+    const saved = loginEnabled ? loadStoredName() : "";
+    if(loginEnabled && state === STATE.MENU){
+      // v1: swap the start screen for the login screen. loginOverlay is
+      // display:none in markup, so the control path never shows it.
+      if(saved) nameInput.value = saved;
+      playerHud.style.display = "";
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -886,8 +1146,17 @@
     subscribeToSpriteChanges();
 
     spawnWave(wave);
+
     updateHud();
-    showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    if(loginEnabled){
+      // v1: reflect any saved callsign in the HUD and retarget the LD context,
+      // unless the player already submitted a (newer) name meanwhile.
+      if(saved && !playerName) setPlayerName(saved);
+    } else {
+      // control: original start screen, exactly as before.
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
+
     requestAnimationFrame(loop);
   }
 

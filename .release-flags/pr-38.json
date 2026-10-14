@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.2",
+  "flagKey": "show-player-login",
+  "scope": "frontend",
+  "releasePlan": {
+    "metricKeys": [
+      "show-player-login-error-rate",
+      "show-player-login-game-start-rate",
+      "show-player-login-latency",
+      "show-player-login-login-completion"
+    ],
+    "randomizationUnit": "ld_device"
+  },
+  "releaseIntent": {
+    "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
+    "action": "auto",
+    "notBefore": "",
+    "segments": [],
+    "prerequisites": [],
+    "releaseWith": [],
+    "reference": "",
+    "approvedBy": "",
+    "notes": ""
+  },
+  "humanInput": {
+    "question": "show-player-login now randomizes by the per-browser `ld_device` context (all browsers share the user key 'anonymous-player', so `user` can't split traffic). The 4 metrics (show-player-login-error-rate, -game-start-rate, -latency, -login-completion) already existed from an earlier run, analyzed by `user`, and the metric tool can't edit existing metrics. In LaunchDarkly, please add `ld_device` to each metric's analysis units (or delete the 4 so the next run recreates them on ld_device), then answer 'done'. Answer 'deleted' if you deleted them. Answer 'use track() as-is' to ship with the user unit, knowing those metrics can't compare groups."
+  }
+}
