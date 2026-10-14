@@ -309,7 +309,8 @@
 
   <div class="cabinet">
     <div class="hud">
-      <div><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
+      <!-- Hidden unless the "enable-player-login" flag serves "v1" (control keeps the original HUD). -->
+      <div id="playerHud" style="display:none"><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
@@ -332,7 +333,7 @@
           <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
         </form>
       </div>
-      <div class="overlay-msg" id="overlay" style="display:none">
+      <div class="overlay-msg" id="overlay">
         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
         <button class="btn amber" id="startBtn">▶ START GAME</button>
@@ -414,6 +415,27 @@
     return (typeof value === "string" && value) ? value : DEFAULT_SHIP_PATH;
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — player login flag
+     Multivariate string flag "enable-player-login":
+       "control" → original start screen, no login (existing behavior)
+       "v1"      → callsign login screen + HUD PLAYER slot + identify()
+     Fails safe to "control" when the SDK is missing, init failed, the
+     flag is absent, or a non-string value comes back.
+  --------------------------------------------------------- */
+  const LD_FLAG_PLAYER_LOGIN = "enable-player-login";
+  const PLAYER_LOGIN_DEFAULT = "control";
+
+  function playerLoginVariation(){
+    if(!ldClient) return PLAYER_LOGIN_DEFAULT;
+    try{
+      const value = ldClient.variation(LD_FLAG_PLAYER_LOGIN, PLAYER_LOGIN_DEFAULT);
+      return (typeof value === "string" && value) ? value : PLAYER_LOGIN_DEFAULT;
+    }catch(_){
+      return PLAYER_LOGIN_DEFAULT;
+    }
+  }
+
   // Fetches a sprite path and hot-swaps the live ship sprite. On failure the
   // current sprite is kept, so a bad flag value never breaks the game.
   async function applyShipSpriteFromPath(path){
@@ -486,6 +508,7 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
+  const playerHudEl = document.getElementById("playerHud");
   const playerEl = document.getElementById("playerVal");
   const scoreEl = document.getElementById("scoreVal");
   const waveEl = document.getElementById("waveVal");
@@ -537,7 +560,11 @@
     // Best-effort: retarget the LD context to this player so flags can be
     // evaluated per-callsign. Failure here must never block play.
     if(ldClient && name){
-      try{ ldClient.identify({ kind:"user", key: name, name: name }); }
+      try{
+        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        // identify() returns a Promise; swallow async rejections too.
+        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+      }
       catch(_){ /* keep the anonymous context */ }
     }
   }
@@ -985,17 +1012,30 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+
+    // Evaluate the login gate once, against the anonymous context, before any
+    // identify() can change the context. Fails safe to "control".
+    // control: the start overlay stays exactly as in markup (visible) and the
+    //          original showOverlay(...) call below runs; no login, no HUD
+    //          PLAYER slot, no identify().
+    // v1:      reveal the login screen (loginOverlay is display:none in markup,
+    //          so control never flashes it).
+    const playerLoginEnabled = playerLoginVariation() === "v1";
+    let saved = "";
+    if(playerLoginEnabled){
+      playerHudEl.style.display = "";
+      // Only take over the screen if the player hasn't already started a game
+      // from the start overlay while the SDK was initialising.
+      if(state === STATE.MENU){
+        saved = loadStoredName();
+        if(saved) nameInput.value = saved;
+        overlay.style.display = "none";
+        loginOverlay.style.display = "flex";
+        nameInput.focus();
+      }
+    }
+
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,10 +1061,18 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    if(playerLoginEnabled){
+      // v1: reflect any saved callsign in the HUD and retarget the LD context —
+      // unless the player already submitted a (possibly new) callsign while the
+      // sprites were loading, in which case never overwrite it with the old one.
+      if(saved && !playerName) setPlayerName(saved);
+      updateHud();
+      // The login screen (or handleLogin's welcome overlay) owns the entry screen.
+    } else {
+      // control: original behavior, unchanged.
+      updateHud();
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
 
     requestAnimationFrame(loop);
   }
