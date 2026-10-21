@@ -415,6 +415,48 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — guarded-release telemetry for "enable-player-login"
+     Emitted on BOTH arms (control + v1) so the release can compare
+     them. Observe-only: never changes game behaviour, and a tracking
+     failure can never break the page. Events are only sent once the
+     flag has been evaluated (playerLoginEntryShownAt > 0 / init done).
+  --------------------------------------------------------- */
+  let playerLoginEntryShownAt = 0;     // when the entry screen (start or login) became interactive
+  let playerLoginFirstGameTracked = false;
+  let playerLoginErrorTracked = false;
+
+  function nowMs(){
+    return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  }
+
+  // Error signal: first uncaught error / unhandled rejection of the session.
+  // Listeners are passive (no preventDefault), so behaviour is unchanged.
+  function watchPlayerLoginErrors(){
+    if(!ldClient) return;
+    const report = ()=>{
+      if(playerLoginErrorTracked || !ldClient) return;
+      playerLoginErrorTracked = true;
+      try{ ldClient.track("enable-player-login-error"); }catch(_){ /* telemetry must never break play */ }
+    };
+    try{
+      window.addEventListener("error", report);
+      window.addEventListener("unhandledrejection", report);
+    }catch(_){ /* ignore */ }
+  }
+
+  // Business + latency signal: the player actually started their first game,
+  // and how long it took from the entry screen being shown.
+  function trackPlayerLoginFirstGameStart(){
+    if(playerLoginFirstGameTracked || !ldClient || !playerLoginEntryShownAt) return;
+    playerLoginFirstGameTracked = true;
+    try{
+      ldClient.track("enable-player-login-game-start");
+      const elapsed = Math.max(0, Math.round(nowMs() - playerLoginEntryShownAt));
+      ldClient.track("enable-player-login-time-to-play", undefined, elapsed);
+    }catch(_){ /* telemetry must never break play */ }
+  }
+
   async function initLaunchDarkly(){
     if(typeof LDClient === "undefined"){
       console.warn("LaunchDarkly SDK not available; using default shooter sprite.");
@@ -779,6 +821,7 @@
   }
 
   function restartGame(){
+    if(state === STATE.MENU) trackPlayerLoginFirstGameStart(); // observe-only
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
     resetGame();
     state = STATE.PLAYING;
@@ -1023,6 +1066,7 @@
     // cache it. Anything other than an exact "v1" (incl. SDK unavailable)
     // takes the control path.
     playerLoginEnabled = playerLoginVariation() === "v1";
+    watchPlayerLoginErrors(); // observe-only guarded-release error signal (both arms)
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1067,6 +1111,7 @@
       updateHud();
       showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
     }
+    playerLoginEntryShownAt = nowMs(); // entry screen is now interactive (both arms)
 
     requestAnimationFrame(loop);
   }
