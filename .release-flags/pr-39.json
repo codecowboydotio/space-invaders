@@ -3,7 +3,18 @@
   "flagKey": "enable-player-login",
   "scope": "frontend",
   "releasePlan": {
-    "notes": "Fresh string multivariate flag (control/v1), created dark; no prerequisite. Known limitation: LDClient.initialize uses a fixed context key 'anonymous-player', so every visitor lands in the same bucket and percentage rollouts or experiments split nothing. Randomizing by user is meaningless until a per-browser anonymous key is added. Also, v1 calls ldClient.identify() with the callsign as the context key: same-name players share a context, it adds LD MAU, and it re-evaluates every flag (including invaders-shooter-sprite) per callsign."
+    "notes": "Fresh string multivariate flag (control/v1), created dark; no prerequisite. Known limitation: LDClient.initialize uses a fixed context key 'anonymous-player', so every visitor lands in the same bucket and percentage rollouts or experiments split nothing. Randomizing by user is meaningless until a per-browser anonymous key is added. Also, v1 calls ldClient.identify() with the callsign as the context key: same-name players share a context, it adds LD MAU, and it re-evaluates every flag (including invaders-shooter-sprite) per callsign.",
+    "metricKeys": [
+      "enable-player-login-error-rate",
+      "enable-player-login-game-start-rate",
+      "enable-player-login-login-completed"
+    ],
+    "randomizationUnit": "user",
+    "metricRoles": {
+      "enable-player-login-error-rate": "killswitch",
+      "enable-player-login-game-start-rate": "pause",
+      "enable-player-login-login-completed": "monitoring"
+    }
   },
   "releaseIntent": {
     "_instructions": "Human approver: edit freely. action: auto (release on deploy) | hold (do not release yet) | manual (a human runs the release). Structured fields execute; anything else goes in notes (an agent will structure it on the PR for your review). Blank fields = default auto-release on deploy. prerequisites: [{\"flagKey\": \"flag-xyz\", \"variation\": \"on\"}]. notBefore: YYYY-MM-DD. reference: ticket/doc URL.",
