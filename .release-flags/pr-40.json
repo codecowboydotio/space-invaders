@@ -20,5 +20,8 @@
     "reference": "",
     "approvedBy": "",
     "notes": ""
+  },
+  "humanInput": {
+    "question": "The guarded release of enable-player-login (randomization unit 'user') cannot compare arms as the code stands: (1) PRE-EXISTING: initLaunchDarkly() starts every browser with the same context key 'anonymous-player', so a user-unit percentage rollout puts ALL anonymous players in the same arm (0% or 100% per step) and the release sees ~1 context; (2) v1's setPlayerName() calls identify({kind:'user', key:<callsign>}), so v1 events sent after login (game-start, time-to-play, errors) belong to a context that never evaluated the flag and are not attributed. Fixing (1) changes control's context key (also re-buckets invaders-shooter-sprite and raises MAU); fixing (2) changes v1 identity semantics. Please answer with one of: 'approve a+b' = (a) omit the hard-coded key so the SDK generates and persists a per-browser anonymous user key, and (b) make v1's identify() a multi-context that keeps that anonymous user context and adds the callsign as a separate 'player' context kind; 'approve b only' (accept a single-context rollout until (1) is fixed elsewhere); or 'release manually' (keep current code, set releaseIntent.action to hold/manual, metrics stay monitoring-only). Until answered, recommend releaseIntent.action = hold."
   }
 }
