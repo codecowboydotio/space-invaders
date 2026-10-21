@@ -12,7 +12,7 @@
     "randomizationUnit": "user",
     "metricRoles": {
       "enable-player-login-error-rate": "killswitch",
-      "enable-player-login-game-start-rate": "pause",
+      "enable-player-login-game-start-rate": "monitoring",
       "enable-player-login-login-completed": "monitoring"
     }
   },
@@ -26,5 +26,8 @@
     "reference": "",
     "approvedBy": "",
     "notes": ""
+  },
+  "humanInput": {
+    "question": "The guarded-release metrics for enable-player-login (randomization unit 'user') cannot compare arms as the code stands: (1) LDClient.initialize uses the fixed key 'anonymous-player', so every visitor is ONE user context and a percentage rollout cannot split anyone; (2) on v1, identify({kind:'user', key:<callsign>}) replaces the user key mid-session, so post-login game-start/error events land on a context that never evaluated this flag (and can re-bucket the player). Proposed fix: (a) initialize with {kind:'user', anonymous:true} and NO key so the SDK generates and persists a per-browser key -- this is pre-existing code and ALSO changes how invaders-shooter-sprite is evaluated/targeted (any rule on key 'anonymous-player' stops matching, percentage rollouts start splitting) and raises client-side MAU from 1 to one per browser; (b) on login, identify with a multi-context {kind:'multi', user:<same anonymous user>, player:{key:<callsign>, name:<callsign>}} so the user key is stable and per-callsign targeting moves to the 'player' kind (v1-only new code). Reply 'approve a+b', 'approve b only' (metrics then stay monitoring-only until the shared key is fixed elsewhere), or 'neither' (all three metrics demoted to monitoring; release has no automated guardrail)."
   }
 }
