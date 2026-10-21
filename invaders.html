@@ -432,6 +432,21 @@
     return playerLoginVariation() === "v1";
   }
 
+  // Guarded-release telemetry for "enable-player-login". Emits a LaunchDarkly
+  // custom event on the current context. Fire-and-forget: a missing client or
+  // a tracking failure is swallowed so telemetry can never affect gameplay.
+  // Callers pass the event key as a literal string (greppable / code refs).
+  function trackPlayerLoginEvent(eventKey){
+    if(!ldClient) return;
+    try{ ldClient.track(eventKey); }catch(_){ /* telemetry must never break play */ }
+  }
+
+  // Page-level error signal, emitted on BOTH control and v1 so the release can
+  // compare error rates between arms. Observe-only: never preventDefault, so
+  // browser error handling is unchanged.
+  window.addEventListener("error", ()=>{ trackPlayerLoginEvent("enable-player-login-error"); });
+  window.addEventListener("unhandledrejection", ()=>{ trackPlayerLoginEvent("enable-player-login-error"); });
+
   function currentShooterSpritePath(){
     if(!ldClient) return DEFAULT_SHIP_PATH;
     const value = ldClient.variation(LD_FLAG_SHOOTER_SPRITE, DEFAULT_SHIP_PATH);
@@ -565,9 +580,14 @@
       try{
         // identify() returns a Promise; swallow async rejections too.
         const pending = ldClient.identify({ kind:"user", key: name, name: name });
-        if(pending && typeof pending.catch === "function") pending.catch(()=>{});
+        if(pending && typeof pending.catch === "function"){
+          pending.catch(()=>{ trackPlayerLoginEvent("enable-player-login-error"); });
+        }
       }
-      catch(_){ /* keep the anonymous context */ }
+      catch(_){
+        /* keep the anonymous context */
+        trackPlayerLoginEvent("enable-player-login-error");
+      }
     }
   }
 
@@ -580,6 +600,9 @@
       return;
     }
     loginError.textContent = "";
+    // v1-only funnel step. Tracked BEFORE setPlayerName() so the event is sent
+    // on the context that evaluated the flag (identify() swaps the context).
+    trackPlayerLoginEvent("enable-player-login-login-completed");
     setPlayerName(name);
     storeName(name);
     loginOverlay.style.display = "none";
@@ -776,6 +799,9 @@
 
   function restartGame(){
     loginOverlay.style.display = "none"; // never leave the login screen stuck over a live game
+    // Business signal on BOTH arms: a game was started from the menu (first
+    // play of the session via START, R, or the restart button).
+    if(state === STATE.MENU) trackPlayerLoginEvent("enable-player-login-game-started");
     resetGame();
     state = STATE.PLAYING;
     hideOverlay();
