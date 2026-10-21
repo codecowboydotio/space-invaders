@@ -309,7 +309,8 @@
 
   <div class="cabinet">
     <div class="hud">
-      <div><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
+      <!-- Hidden unless "enable-player-login" serves "v1" (revealed in init()). -->
+      <div id="playerHud" style="display:none"><span class="label">PLAYER </span><span class="val" id="playerVal">---</span></div>
       <div><span class="label">SCORE </span><span class="val" id="scoreVal">0000</span></div>
       <div><span class="label">WAVE </span><span class="val" id="waveVal">01</span></div>
       <div><span class="label">HI </span><span class="val" id="hiVal">0000</span></div>
@@ -332,7 +333,7 @@
           <button class="btn amber" id="loginBtn" type="submit">▶ ENTER ARCADE</button>
         </form>
       </div>
-      <div class="overlay-msg" id="overlay" style="display:none">
+      <div class="overlay-msg" id="overlay">
         <h2 id="overlayTitle">GALACTIC DEFENDER</h2>
         <p id="overlayText">Defend the last frontier. Arrow keys or A/D to move, SPACE to fire, P to pause.</p>
         <button class="btn amber" id="startBtn">▶ START GAME</button>
@@ -389,6 +390,30 @@
   // Kept alive for the lifetime of the page so the streaming connection stays
   // open and change events keep flowing.
   let ldClient = null;
+
+  /* ---------------------------------------------------------
+     LAUNCHDARKLY — player login flag
+     Multivariate string flag "enable-player-login":
+       "control" → existing start flow (no login, anonymous context)
+       "v1"      → callsign login screen + HUD PLAYER + identify()
+     Fails safe to "control" when the SDK is missing, init fails,
+     or the flag returns anything unexpected. Evaluated ONCE at
+     init and cached, so a later identify() (which re-keys the
+     context) can never flip the player between arms mid-session.
+  --------------------------------------------------------- */
+  const LD_FLAG_PLAYER_LOGIN = "enable-player-login";
+  const PLAYER_LOGIN_CONTROL = "control";
+  let playerLoginEnabled = false; // cached result of the one-time evaluation
+
+  function playerLoginVariation(){
+    if(!ldClient) return PLAYER_LOGIN_CONTROL;
+    try{
+      const value = ldClient.variation(LD_FLAG_PLAYER_LOGIN, PLAYER_LOGIN_CONTROL);
+      return (typeof value === "string" && value) ? value : PLAYER_LOGIN_CONTROL;
+    }catch(_){
+      return PLAYER_LOGIN_CONTROL;
+    }
+  }
 
   async function initLaunchDarkly(){
     if(typeof LDClient === "undefined"){
@@ -487,6 +512,7 @@
   const W = canvas.width, H = canvas.height;
 
   const playerEl = document.getElementById("playerVal");
+  const playerHudEl = document.getElementById("playerHud");
   const scoreEl = document.getElementById("scoreVal");
   const waveEl = document.getElementById("waveVal");
   const hiEl = document.getElementById("hiVal");
@@ -532,18 +558,25 @@
   }
 
   function setPlayerName(name){
+    // Defensive: the login feature (and its context switch) only exists in
+    // the "v1" arm. Control must never re-key the LD context.
+    if(!playerLoginEnabled) return;
     playerName = name;
     playerEl.textContent = name || "---";
     // Best-effort: retarget the LD context to this player so flags can be
     // evaluated per-callsign. Failure here must never block play.
     if(ldClient && name){
-      try{ ldClient.identify({ kind:"user", key: name, name: name }); }
+      try{
+        const p = ldClient.identify({ kind:"user", key: name, name: name });
+        if(p && typeof p.catch === "function") p.catch(()=>{ /* keep the anonymous context */ });
+      }
       catch(_){ /* keep the anonymous context */ }
     }
   }
 
   function handleLogin(e){
     if(e) e.preventDefault();
+    if(!playerLoginEnabled) return; // login UI is unreachable in control
     const name = sanitizeName(nameInput.value);
     if(name.length < 1){
       loginError.textContent = "CALLSIGN REQUIRED";
@@ -985,17 +1018,11 @@
      INIT
   --------------------------------------------------------- */
   async function init(){
-    // Reveal the login screen immediately — before any async SDK work — so it
-    // shows deterministically from JS. loginOverlay is display:none in markup,
-    // so if the feature is ever gated off, the control path never flashes it
-    // in and back out.
-    const saved = loadStoredName();
-    if(saved) nameInput.value = saved;
-    overlay.style.display = "none";
-    loginOverlay.style.display = "flex";
-    nameInput.focus();
-
     await initLaunchDarkly();
+    // Evaluate the login flag exactly once, before any identify() call, and
+    // cache it. Anything other than an exact "v1" (incl. SDK unavailable)
+    // takes the control path.
+    playerLoginEnabled = playerLoginVariation() === "v1";
     const shipPath = currentShooterSpritePath();
 
     try{
@@ -1021,10 +1048,25 @@
 
     spawnWave(wave);
 
-    // Now that the LD client exists, reflect any saved callsign in the HUD and
-    // retarget the LD context (identify() is a no-op until ldClient is ready).
-    if(saved) setPlayerName(saved);
-    updateHud();
+    if(playerLoginEnabled){
+      // v1: callsign login screen. Revealed only after LD init + spawnWave so
+      // START can't be reached before the game is ready. loginOverlay is
+      // display:none in markup, so control never flashes it.
+      const saved = loadStoredName();
+      if(saved) nameInput.value = saved;
+      playerHudEl.style.display = "";
+      // Reflect any saved callsign in the HUD and retarget the LD context.
+      // Prefer a name already set this session over the stored one.
+      if(!playerName && saved) setPlayerName(saved);
+      updateHud();
+      overlay.style.display = "none";
+      loginOverlay.style.display = "flex";
+      nameInput.focus();
+    } else {
+      // control: original start flow — no login, no HUD PLAYER, no identify().
+      updateHud();
+      showOverlay("GALACTIC DEFENDER", "Defend the last frontier.<br>Arrow keys or A/D to move, SPACE to fire, P to pause.", "▶ START GAME");
+    }
 
     requestAnimationFrame(loop);
   }
